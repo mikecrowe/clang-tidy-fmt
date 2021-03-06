@@ -1,114 +1,144 @@
-# The LLVM Compiler Infrastructure
+# clang-tidy fmt checks
 
-This directory and its sub-directories contain source code for LLVM,
-a toolkit for the construction of highly optimized compilers,
-optimizers, and run-time environments.
+This "fork" of [llvm-project][1] adds a proof-of-concept clang-tidy checker
+that converts occurrences of `printf` and `fprintf` to `fmt::print` (as
+provided by the [{fmt}][2] library) and modifies the format string
+appropriately. In other words, it turns:
 
-The README briefly describes how to get started with building LLVM.
-For more information on how to contribute to the LLVM project, please
-take a look at the
-[Contributing to LLVM](https://llvm.org/docs/Contributing.html) guide.
+```C++
+fprintf(stderr, "The %s is %3d\n", answer, value);
+```
+into:
+```C++
+fmt::print(stderr, "The {} is {:3}\n", answer, value);
+```
 
-## Getting Started with the LLVM System
+It doesn't do a bad job, but it's not perfect. In particular:
 
-Taken from https://llvm.org/docs/GettingStarted.html.
+* It assumes that the input is mostly sane. If you get any warnings when
+  compiling with `-Wformat` then misbehaviour is possible.
 
-### Overview
+* At the point that the check runs, the AST contains a single
+  `StringLiteral` for the format string and any macro expansion, token
+  pasting, adjacent string literal concatenation and escaping has been
+  handled. Although it's possible for the check to automatically put the
+  escapes back, they may not be exactly as they were written (e.g. "\x0a"
+  will become "\n" and "ab" "cd" will become "abcd".) It turns out that
+  it's probably quite important that macro expansion and adjacent string
+  literal concatenation happen before we parse the format string in order
+  to cope with the <inttypes.h> PRI macros.
 
-Welcome to the LLVM project!
+* It tries to support field widths, precision, positional arguments,
+  leading zeros, leading +, alignment and alternative forms.
 
-The LLVM project has multiple components. The core of the project is
-itself called "LLVM". This contains all of the tools, libraries, and header
-files needed to process intermediate representations and convert them into
-object files.  Tools include an assembler, disassembler, bitcode analyzer, and
-bitcode optimizer.  It also contains basic regression tests.
+* It is assumed that the `fmt/format.h` header has already been included.
+  No attempt is made to include it.
 
-C-like languages use the [Clang](http://clang.llvm.org/) front end.  This
-component compiles C, C++, Objective-C, and Objective-C++ code into LLVM bitcode
--- and from there into object files, using LLVM.
+* Use of any unsupported flags or specifiers will cause the entire
+  statement to be left alone. Known unsupported features are:
 
-Other components include:
-the [libc++ C++ standard library](https://libcxx.llvm.org),
-the [LLD linker](https://lld.llvm.org), and more.
+  * The `%'` flag for thousands separators. It looks like this could be
+    translated to `{:L}`, but I'm not sure it will do exactly the same
+    thing.
 
-### Getting the Source Code and Building LLVM
+  * The glibc extension `%m`. This could be supported relatively easily if
+    we can assume that `strerror` is thread safe (which glibc version is.)
 
-The LLVM Getting Started documentation may be out of date.  The [Clang
-Getting Started](http://clang.llvm.org/get_started.html) page might have more
-accurate information.
+* It has some tests in
+  clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp but
+  they probably don't cover the full set of possibilities.
 
-This is an example work-flow and configuration to get and build the LLVM source:
+* It copes with calls to printf, ::printf and std::printf. Unfortunately
+  this means that it also changes mine::printf which is probably incorrect.
+  My attempts to fix this using isInStdNamespace() have failed.
 
-1. Checkout LLVM (including related sub-projects like Clang):
+* This is my first attempt at a clang-tidy checker, so it's probably full
+  of things that aren't done the idiomatic LLVM way.
 
-     * ``git clone https://github.com/llvm/llvm-project.git``
+* It's not separated into easily-understandable commits with good commit
+  messages yet.
 
-     * Or, on windows, ``git clone --config core.autocrlf=false
-    https://github.com/llvm/llvm-project.git``
+## Usage:
 
-2. Configure and build LLVM and Clang:
+Build clang-tidy following the [upstream instructions][1]. Install it if
+you wish, or just run from the build directory with something like:
 
-     * ``cd llvm-project``
+    bin/clang-tidy -checks='-*,fmt-printf-convert' --fix input.cpp
 
-     * ``cmake -S llvm -B build -G <generator> [options]``
+## How it works
 
-        Some common build system generators are:
+There are no clang-tidy checks for fmt yet, so I've added
+`clangTidyFmtModule`. The `FormatStringConverter` class makes use of
+Clang's own `ParsePrintfString` to walk the format string deciding what to
+do. If the format string can be converted then `PrintfConvertCheck` simply
+needs to replace `printf` or `fprintf` with `fmt::print`, and tell
+`FormatStringConverter` to apply the necessary fixes. The applied fixes are:
 
-        * ``Ninja`` --- for generating [Ninja](https://ninja-build.org)
-          build files. Most llvm developers use Ninja.
-        * ``Unix Makefiles`` --- for generating make-compatible parallel makefiles.
-        * ``Visual Studio`` --- for generating Visual Studio projects and
-          solutions.
-        * ``Xcode`` --- for generating Xcode projects.
+* `printf`/`fprintf` becomes `fmt::print`
+* rewrite the format string to use the [{fmt} format language][3]
+* wrap any arguments that corresponded to `%p` specifiers that {fmt} won't
+  deal with in a call to `fmt::ptr`.
 
-        Some common options:
+## Will it work for my printf-like function too?
 
-        * ``-DLLVM_ENABLE_PROJECTS='...'`` and ``-DLLVM_ENABLE_RUNTIMES='...'`` ---
-          semicolon-separated list of the LLVM sub-projects and runtimes you'd like to
-          additionally build. ``LLVM_ENABLE_PROJECTS`` can include any of: clang,
-          clang-tools-extra, cross-project-tests, flang, libc, libclc, lld, lldb,
-          mlir, openmp, polly, or pstl. ``LLVM_ENABLE_RUNTIMES`` can include any of
-          libcxx, libcxxabi, libunwind, compiler-rt, libc or openmp. Some runtime
-          projects can be specified either in ``LLVM_ENABLE_PROJECTS`` or in
-          ``LLVM_ENABLE_RUNTIMES``.
+Maybe. In addition to the `fmt-printf-convert` check, there are two other
+checks that are unlikely to be useful as they are, but they may be
+modifiable to do what you want: `fmt-strprintf-convert` and
+`fmt-trace-convert`.
 
-          For example, to build LLVM, Clang, libcxx, and libcxxabi, use
-          ``-DLLVM_ENABLE_PROJECTS="clang" -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi"``.
+### fmt-strprintf-convert
 
-        * ``-DCMAKE_INSTALL_PREFIX=directory`` --- Specify for *directory* the full
-          path name of where you want the LLVM tools and libraries to be installed
-          (default ``/usr/local``). Be careful if you install runtime libraries: if
-          your system uses those provided by LLVM (like libc++ or libc++abi), you
-          must not overwrite your system's copy of those libraries, since that
-          could render your system unusable. In general, using something like
-          ``/usr`` is not advised, but ``/usr/local`` is fine.
+The `fmt-strprintf-convert` check converts calls to a commonly-implemented
+`sprintf` wrapper function that is expected to return `std::string` to the
+equivalent `fmt::format` call. For example, it turns:
 
-        * ``-DCMAKE_BUILD_TYPE=type`` --- Valid options for *type* are Debug,
-          Release, RelWithDebInfo, and MinSizeRel. Default is Debug.
+```C++
+const std::string s = strprintf("%d", 42);
+```
+into:
+```C++
+const std::string s = fmt::format("{}", 42);
+```
 
-        * ``-DLLVM_ENABLE_ASSERTIONS=On`` --- Compile with assertion checks enabled
-          (default is Yes for Debug builds, No for all other build types).
+### fmt-trace-convert
 
-      * ``cmake --build build [-- [options] <target>]`` or your build system specified above
-        directly.
+The `fmt-trace-convert` check converts calls to operator() on an object
+that derives from a particular class (in this case, the class is
+`BaseTrace`. For example, it converts:
+```C++
+class DerivedTrace : public BaseTrace {};
+BaseTrace TRACE;
+DerivedTrace TRACE2;
 
-        * The default target (i.e. ``ninja`` or ``make``) will build all of LLVM.
+TRACE("%s=%d\n", name, value);
+TRACE2("%s\n", name);
+```
+into:
+```C++
+class DerivedTrace : public BaseTrace {};
+BaseTrace TRACE;
+DerivedTrace TRACE2;
 
-        * The ``check-all`` target (i.e. ``ninja check-all``) will run the
-          regression tests to ensure everything is in working order.
+TRACE("{}={}\n", name, value);
+TRACE2("{}\n", name);
+```
 
-        * CMake will generate targets for each tool and library, and most
-          LLVM sub-projects generate their own ``check-<project>`` target.
+(It is assumed that the implementation of `BaseTrace` will be modified at
+the same time to expect the new form of format string.)
 
-        * Running a serial build will be **slow**.  To improve speed, try running a
-          parallel build.  That's done by default in Ninja; for ``make``, use the option
-          ``-j NNN``, where ``NNN`` is the number of parallel jobs, e.g. the number of
-          CPUs you have.
+## Running the LIT tests
 
-      * For more information see [CMake](https://llvm.org/docs/CMake.html)
+Once you've built everything, run something like:
 
-Consult the
-[Getting Started with LLVM](https://llvm.org/docs/GettingStarted.html#getting-started-with-llvm)
-page for detailed information on configuring and compiling LLVM. You can visit
-[Directory Layout](https://llvm.org/docs/GettingStarted.html#directory-layout)
-to learn about the layout of the source code tree.
+    bin/llvm-lit -v ../clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp
+
+
+## The Future
+
+The [{fmt}][2] library is gradually being standardised. `fmt::format` is in
+C++20 as `std::format`. It would not be hard to adapt these checks to
+convert to the standard versions instead.
+
+[1]: https://github.com/llvm/llvm-project
+[2]: https://fmt.dev/
+[3]: https://fmt.dev/latest/syntax.html
