@@ -20,12 +20,14 @@ using namespace clang::ast_matchers;
 //    | `-ImplicitCastExpr 0x55dda8d48bd0 <col:11> 'const char *' <ArrayToPointerDecay>
 //    |   `-StringLiteral 0x55dda8d488e8 <col:11> 'const char [7]' lvalue "Hello\n"
 
+const auto DerivedTraceClassExpr = expr(hasType(cxxRecordDecl(isDerivedFrom("::NullTrace"))));
 const auto TraceClassExpr = expr(hasType(cxxRecordDecl(hasName("::NullTrace"))));
 
 StatementMatcher TraceMatcher =
     traverse(TK_AsIs,
              cxxOperatorCallExpr(hasOverloadedOperatorName("()"),
-                                 hasArgument(0, TraceClassExpr)
+                                 hasArgument(0, anyOf(TraceClassExpr, DerivedTraceClassExpr)),
+                                 hasArgument(1, stringLiteral().bind("format"))
                  ).bind("trace"));
 
 StatementMatcher LoopMatcher =
@@ -65,7 +67,18 @@ static bool areSameExpr(ASTContext *Context, const Expr *First,
 #endif
 
 void TracePrinter::run(const MatchFinder::MatchResult &Result) {
-    llvm::outs() << "Hello\n";
+    llvm::outs() << "Operator call\n";
+    const auto *OpCall = Result.Nodes.getNodeAs<CXXOperatorCallExpr>("trace");
+    OpCall->dumpPretty(*Result.Context);
+    llvm::outs() << "\n\n";
+
+    llvm::outs() << "Format string\n";
+    const auto *Format = Result.Nodes.getNodeAs<clang::StringLiteral>("format");
+    Format->dumpPretty(*Result.Context);
+    llvm::outs() << "\n\n";
+
+//    ASTContext *Context = Result.Context;
+//    Result.SourceManager->dump();
 #if 0
   ASTContext *Context = Result.Context;
   const ForStmt *FS = Result.Nodes.getNodeAs<ForStmt>("forLoop");
