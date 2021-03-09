@@ -11,6 +11,7 @@ add_clang_library(clangTidyUtils
   ExprSequence.cpp
   FileExtensionsUtils.cpp
   FixItHintUtils.cpp
+  FormatStringConverter.cpp
   HeaderGuard.cpp
   IncludeInserter.cpp
   IncludeSorter.cpp
