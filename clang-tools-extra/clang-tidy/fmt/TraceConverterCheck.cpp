@@ -8,6 +8,7 @@
 
 #include "TraceConverterCheck.h"
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/FormatString.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 
 using namespace clang::ast_matchers;
@@ -37,6 +38,74 @@ void TraceConverterCheck::registerMatchers(MatchFinder *Finder) {
   Finder->addMatcher(TraceMatcher, this);
 }
 
+class FormatStringConverterHandler : public clang::analyze_format_string::FormatStringHandler {
+  size_t PrintfFormatStringPos = 0U;
+  const StringRef PrintfFormatString;
+  std::string StandardFormatString;
+
+  public:
+  explicit FormatStringConverterHandler(const StringRef PrintfFormatStringIn)
+      : PrintfFormatString(PrintfFormatStringIn)
+  {
+    StandardFormatString.reserve(PrintfFormatString.size());
+  }
+
+  bool HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier &FS,
+                                     const char *startSpecifier,
+                             unsigned specifierLen) override;
+
+  std::string getStandardFormatString() && {
+    StandardFormatString.append(PrintfFormatString.begin() + PrintfFormatStringPos, PrintfFormatString.end());
+
+    std::string result;
+    result.push_back('\"');
+    for(const char ch : StandardFormatString) {
+        if (ch == '\n')
+            result += "\\n";
+        else if (ch == '\r')
+            result += "\\r";
+        else if (ch == '\b')
+            result += "\\b";
+        else if (ch == '\v')
+            result += "\\v";
+        else if (ch == '\"')
+            result += "\\\"";
+        else if (ch == '\\')
+            result += "\\\\";
+        else
+            result += ch;
+    }
+    result.push_back('\"');
+
+    llvm::outs() << "getStandardFormatString is \"" << StandardFormatString << "\"\n";
+    return result;
+  }
+};
+
+bool FormatStringConverterHandler::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier &FS,
+                                                         const char *startSpecifier,
+                                                         unsigned specifierLen) {
+  llvm::outs() << "Specifier at " << startSpecifier - PrintfFormatString.data() << " for " << specifierLen << "\n";
+  llvm::outs() << "PrintfFormatStringPos is " << PrintfFormatStringPos << "\n";
+  llvm::outs() << "StandardFormatString is \"" << StandardFormatString << "\"\n";
+
+  const size_t StartSpecifierPos = startSpecifier - PrintfFormatString.data();
+  assert(StartSpecifierPos + specifierLen <= PrintfFormatString.size());
+
+  // Everything before the specifier needs copying verbatim
+  assert(StartSpecifierPos >= PrintfFormatStringPos);
+
+  StandardFormatString.append(PrintfFormatString.begin() + PrintfFormatStringPos, PrintfFormatString.begin() + StartSpecifierPos);
+
+  // Now append the standard version of the printf specifier
+  StandardFormatString.append("{}");
+
+  // Skip over specifier
+  PrintfFormatStringPos = StartSpecifierPos + specifierLen;
+  assert(PrintfFormatStringPos <= PrintfFormatString.size());
+  return true;
+}
+
 void TraceConverterCheck::check(const MatchFinder::MatchResult &Result) {
   llvm::outs() << "Operator call\n";
   const auto *OpCall = Result.Nodes.getNodeAs<CXXOperatorCallExpr>("trace");
@@ -48,11 +117,39 @@ void TraceConverterCheck::check(const MatchFinder::MatchResult &Result) {
   Format->dumpPretty(*Result.Context);
   llvm::outs() << "\n\n";
 
+  using clang::analyze_format_string::ParsePrintfString;
+  //  using clang::analyze_format_string::FormatStringHandler;
+
+  const StringRef FormatString = Format->getString();
+
+  llvm::outs() << "Format getstring: " << FormatString << "\n";
+
+  FormatStringConverterHandler Handler(FormatString);
+  LangOptions LO;
+  const bool isFreeBSDKPrintf = false;
+
+  if (ParsePrintfString(Handler,
+                        FormatString.data(), FormatString.data() + FormatString.size(),
+                        LO, Result.Context->getTargetInfo(), isFreeBSDKPrintf)) {
+    printf("Success\n");
+  }
+  else {
+    printf("Failure\n");
+  }
+
+#if 0
+  auto ReplacementFormatString = clang::StringLiteral::Create(Result.Context,
+                                                              FormatString.getKind(),
+                                                              FormatString.isPascal(), ...);
+#endif
+
+
   diag(Format->getBeginLoc(),
        "replace format string")
       << FixItHint::CreateReplacement(CharSourceRange::getTokenRange(Format->getBeginLoc(),
                                                                      Format->getEndLoc()),
-                                      "wibble");
+                                      std::move(Handler).getStandardFormatString());
+
 #if 0
   const auto *Op = Result.Nodes.getNodeAs<CXXOperatorCallExpr>("Op");
   const auto *Call = Result.Nodes.getNodeAs<CallExpr>("Call");
