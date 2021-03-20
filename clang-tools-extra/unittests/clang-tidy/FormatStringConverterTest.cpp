@@ -14,10 +14,27 @@ TEST(FormatStringConverter, EmptyString) {
   ASSERT_EQ(stdFormatStringFromPrintfFormatString(""), "");
 }
 
-TEST(FormatStringConverter, PlainString) {
-  const char plain[] = "This string contains nothing that needs translating";
-  ASSERT_EQ(stdFormatStringFromPrintfFormatString(plain), plain);
+TEST(FormatStringConverter, NoDirectivesOrEscapes) {
+  const char Input[] = "This string contains nothing that needs translating";
+  ASSERT_EQ(stdFormatStringFromPrintfFormatString(Input), Input);
 }
+
+TEST(FormatStringConverter, Escapes) {
+  const char Input[] = "This\nstring\bcontains\v\only\x45scapes";
+  ASSERT_EQ(stdFormatStringFromPrintfFormatString(Input), Input);
+}
+
+TEST(FormatStringConverter, PercentDirective) {
+  const char Input[] = "%%";
+  ASSERT_EQ(stdFormatStringFromPrintfFormatString(Input), "%");
+}
+
+#if 0
+TEST(FormatStringConverter, SimpleStringSubstitution) {
+  const char Input[] = "%s";
+  ASSERT_EQ(stdFormatStringFromPrintfFormatString(Input), "{}");
+}
+#endif
 
 } // namespace test
 } // namespace tidy
