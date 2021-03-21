@@ -10,6 +10,7 @@
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
 #include "TraceConverterCheck.h"
+#include "PrintfConvertCheck.h"
 
 namespace clang {
 namespace tidy {
@@ -20,6 +21,8 @@ public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
     CheckFactories.registerCheck<TraceConverterCheck>(
         "fmt-trace-converter");
+    CheckFactories.registerCheck<PrintfConvertCheck>(
+        "fmt-printf-convert");
   }
 };
 
