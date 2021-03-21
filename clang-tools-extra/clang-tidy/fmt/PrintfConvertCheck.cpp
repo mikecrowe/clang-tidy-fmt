@@ -114,10 +114,17 @@ bool FormatStringConverter::HandlePrintfSpecifier(const analyze_printf::PrintfSp
   assert(StartSpecifierPos >= PrintfFormatStringPos);
 
   StandardFormatString.append(PrintfFormatString.begin() + PrintfFormatStringPos, PrintfFormatString.begin() + StartSpecifierPos);
+
   StandardFormatString.push_back('{');
 
   if (FS.usesPositionalArg())
     StandardFormatString.append(llvm::utostr(FS.getPositionalArgIndex()));
+
+  std::string FormatSpec;
+
+  if (FS.hasAlternativeForm()) {
+    FormatSpec.push_back('#');
+  }
 
   const OptionalAmount FieldWidth = FS.getFieldWidth();
   switch (FieldWidth.getHowSpecified())
@@ -125,19 +132,22 @@ bool FormatStringConverter::HandlePrintfSpecifier(const analyze_printf::PrintfSp
     case OptionalAmount::NotSpecified:
       break;
     case OptionalAmount::Constant:
-      StandardFormatString.push_back(':');
-      StandardFormatString.append(llvm::utostr(FieldWidth.getConstantAmount()));
+      FormatSpec.append(llvm::utostr(FieldWidth.getConstantAmount()));
       break;
     case OptionalAmount::Arg:
-      StandardFormatString.push_back(':');
-      StandardFormatString.push_back('{');
+      FormatSpec.push_back('{');
       if (FieldWidth.usesPositionalArg())
-        StandardFormatString.append(llvm::utostr(FieldWidth.getPositionalArgIndex()));
-      StandardFormatString.push_back('}');
+        FormatSpec.append(llvm::utostr(FieldWidth.getPositionalArgIndex()));
+      FormatSpec.push_back('}');
       break;
     case OptionalAmount::Invalid:
       break;
     }
+
+  if (!FormatSpec.empty()) {
+    StandardFormatString.push_back(':');
+    StandardFormatString.append(FormatSpec);
+  }
 
   // Now append the standard version of the printf specifier
   StandardFormatString.push_back('}');
