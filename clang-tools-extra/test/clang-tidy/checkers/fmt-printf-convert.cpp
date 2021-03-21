@@ -2,6 +2,12 @@
 
 #include <stdio.h>
 
+void printf_percent() {
+  printf("Hello %% and another %%");
+  // CHECK-MESSAGES: [[@LINE-1]]:10: warning: replace format string [fmt-printf-convert]
+  // CHECK-FIXES: printf("Hello % and another %");
+}
+
 void printf_integer() {
   printf("Hello %d after\n", 42);
   // CHECK-MESSAGES: [[@LINE-1]]:10: warning: replace format string [fmt-printf-convert]
