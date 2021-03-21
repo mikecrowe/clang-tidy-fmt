@@ -39,3 +39,9 @@ void printf_field_width() {
   // CHECK-MESSAGES: [[@LINE-1]]:10: warning: replace format string [fmt-printf-convert]
   // CHECK-FIXES: printf("Hello {2:{1}} after\n", 5, 424242);
 }
+
+void printf_alternative_form() {
+  printf("Wibble %#x\n", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:10: warning: replace format string [fmt-printf-convert]
+  // CHECK-FIXES: printf("Wibble {:#}\n", 42);
+}
