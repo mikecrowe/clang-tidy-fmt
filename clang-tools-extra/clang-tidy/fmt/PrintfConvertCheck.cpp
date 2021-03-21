@@ -101,6 +101,8 @@ class FormatStringConverter : public clang::analyze_format_string::FormatStringH
 bool FormatStringConverter::HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier &FS,
                                                          const char *startSpecifier,
                                                          unsigned specifierLen) {
+  using namespace analyze_printf;
+
   llvm::outs() << "Specifier at " << startSpecifier - PrintfFormatString.data() << " for " << specifierLen << "\n";
   llvm::outs() << "PrintfFormatStringPos is " << PrintfFormatStringPos << "\n";
   llvm::outs() << "StandardFormatString is \"" << StandardFormatString << "\"\n";
@@ -112,9 +114,33 @@ bool FormatStringConverter::HandlePrintfSpecifier(const analyze_printf::PrintfSp
   assert(StartSpecifierPos >= PrintfFormatStringPos);
 
   StandardFormatString.append(PrintfFormatString.begin() + PrintfFormatStringPos, PrintfFormatString.begin() + StartSpecifierPos);
+  StandardFormatString.push_back('{');
+
+  if (FS.usesPositionalArg())
+    StandardFormatString.append(llvm::utostr(FS.getPositionalArgIndex()));
+
+  const OptionalAmount FieldWidth = FS.getFieldWidth();
+  switch (FieldWidth.getHowSpecified())
+    {
+    case OptionalAmount::NotSpecified:
+      break;
+    case OptionalAmount::Constant:
+      StandardFormatString.push_back(':');
+      StandardFormatString.append(llvm::utostr(FieldWidth.getConstantAmount()));
+      break;
+    case OptionalAmount::Arg:
+      StandardFormatString.push_back(':');
+      StandardFormatString.push_back('{');
+      if (FieldWidth.usesPositionalArg())
+        StandardFormatString.append(llvm::utostr(FieldWidth.getPositionalArgIndex()));
+      StandardFormatString.push_back('}');
+      break;
+    case OptionalAmount::Invalid:
+      break;
+    }
 
   // Now append the standard version of the printf specifier
-  StandardFormatString.append("{}");
+  StandardFormatString.push_back('}');
 
   // Skip over specifier
   PrintfFormatStringPos = StartSpecifierPos + specifierLen;
