@@ -76,12 +76,18 @@ class FormatStringConverter : public clang::analyze_format_string::FormatStringH
     std::string result;
     result.push_back('\"');
     for(const char ch : StandardFormatString) {
-        if (ch == '\n')
+        if (ch == '\a')
+            result += "\\a";
+        else if (ch == '\b')
+            result += "\\b";
+        else if (ch == '\f')
+            result += "\\f";
+        else if (ch == '\n')
             result += "\\n";
         else if (ch == '\r')
             result += "\\r";
-        else if (ch == '\b')
-            result += "\\b";
+        else if (ch == '\t')
+            result += "\\t";
         else if (ch == '\v')
             result += "\\v";
         else if (ch == '\"')
