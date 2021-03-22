@@ -2,6 +2,12 @@
 
 #include <stdio.h>
 
+void printf_escape() {
+  printf("Bell\aBackspace\bFF\fNewline\nCR\rTab\tVT\v");
+  // CHECK-MESSAGES: [[@LINE-1]]:10: warning: replace format string [fmt-printf-convert]
+  // CHECK-FIXES: printf("Bell\aBackspace\bFF\fNewline\nCR\rTab\tVT\v");
+}
+
 void printf_percent() {
   printf("Hello %% and another %%");
   // CHECK-MESSAGES: [[@LINE-1]]:10: warning: replace format string [fmt-printf-convert]
