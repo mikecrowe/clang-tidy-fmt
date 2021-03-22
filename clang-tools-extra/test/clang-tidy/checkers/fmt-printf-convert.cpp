@@ -2,6 +2,18 @@
 
 #include <stdio.h>
 
+void printf_simple() {
+  printf("Hello");
+  // CHECK-MESSAGES: [[@LINE-1]]:10: warning: replace format string [fmt-printf-convert]
+  // CHECK-FIXES: printf("Hello");
+}
+
+void fprintf_simple() {
+  fprintf(stderr, "Hello");
+  // CHECK-MESSAGES: [[@LINE-1]]:19: warning: replace format string [fmt-printf-convert]
+  // CHECK-FIXES: fprintf(stderr, "Hello");
+}
+
 void printf_escape() {
   printf("Bell\aBackspace\bFF\fNewline\nCR\rTab\tVT\v");
   // CHECK-MESSAGES: [[@LINE-1]]:10: warning: replace format string [fmt-printf-convert]

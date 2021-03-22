@@ -39,19 +39,12 @@ void PrintfConvertCheck::registerMatchers(MatchFinder *Finder) {
                  callExpr(callee(functionDecl(hasName("printf"))),
                           hasArgument(0, stringLiteral().bind("format"))).bind("printf"));
     Finder->addMatcher(PrintfMatcher, this);
-#if 0
-  const auto DerivedTraceClassExpr = expr(hasType(cxxRecordDecl(isDerivedFrom("::NullTrace"))));
-  const auto TraceClassExpr = expr(hasType(cxxRecordDecl(hasName("::NullTrace"))));
 
-  StatementMatcher TraceMatcher =
-      traverse(TK_AsIs,
-               cxxOperatorCallExpr(hasOverloadedOperatorName("()"),
-                                   hasArgument(0, anyOf(TraceClassExpr, DerivedTraceClassExpr)),
-                                   hasArgument(1, stringLiteral().bind("format"))
-                                   ).bind("trace"));
-
-  Finder->addMatcher(TraceMatcher, this);
-#endif
+    StatementMatcher FprintfMatcher =
+        traverse(TK_AsIs,
+                 callExpr(callee(functionDecl(hasName("fprintf"))),
+                          hasArgument(1, stringLiteral().bind("format"))).bind("printf"));
+    Finder->addMatcher(FprintfMatcher, this);
 }
 
 class FormatStringConverter : public clang::analyze_format_string::FormatStringHandler {
