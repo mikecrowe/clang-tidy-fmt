@@ -47,6 +47,10 @@ void PrintfConvertCheck::registerMatchers(MatchFinder *Finder) {
     Finder->addMatcher(FprintfMatcher, this);
 }
 
+/// Convert a printf-style format string to a libfmt-style one. This class is
+/// suboptimal because it works on the already-cooked format string (i.e. all
+/// the escapes have been converted) so we have to convert them back. This means
+/// that we might not convert them back using the same form.
 class FormatStringConverter : public clang::analyze_format_string::FormatStringHandler {
   size_t PrintfFormatStringPos = 0U;
   const StringRef PrintfFormatString;
@@ -57,7 +61,9 @@ class FormatStringConverter : public clang::analyze_format_string::FormatStringH
   explicit FormatStringConverter(const StringRef PrintfFormatStringIn)
       : PrintfFormatString(PrintfFormatStringIn)
   {
-    StandardFormatString.reserve(PrintfFormatString.size());
+    // Assume that the output will be approximately the same size as the input,
+    // but perhaps with a few escapes expanded.
+    StandardFormatString.reserve(PrintfFormatString.size() + 8);
   }
 
   bool HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier &FS,
@@ -92,6 +98,11 @@ class FormatStringConverter : public clang::analyze_format_string::FormatStringH
             result += "\\\"";
         else if (ch == '\\')
             result += "\\\\";
+        else if (ch < 32) {
+          result += "\\x";
+          result += llvm::hexdigit(ch >> 4, true);
+          result += llvm::hexdigit(ch & 0xf, true);
+        }
         else
             result += ch;
     }

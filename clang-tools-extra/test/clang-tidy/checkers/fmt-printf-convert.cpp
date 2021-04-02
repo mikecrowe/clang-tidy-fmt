@@ -15,9 +15,9 @@ void fprintf_simple() {
 }
 
 void printf_escape() {
-  printf("Bell\aBackspace\bFF\fNewline\nCR\rTab\tVT\v");
+  printf("Bell\aBackspace\bFF\fNewline\nCR\rTab\tVT\vEscape\x1b\x07 %d", 42);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Bell\aBackspace\bFF\fNewline\nCR\rTab\tVT\v");
+  // CHECK-FIXES: fmt::print("Bell\aBackspace\bFF\fNewline\nCR\rTab\tVT\vEscape\x1b\a {}", 42);
 }
 
 void printf_percent() {
