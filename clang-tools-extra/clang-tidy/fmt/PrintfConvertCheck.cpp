@@ -17,22 +17,6 @@ namespace clang {
 namespace tidy {
 namespace fmt {
 
-// `-FunctionDecl 0x559a988524e0 <../clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp:5:1, line:9:1> line:5:6 f 'void ()'
-//   `-CompoundStmt 0x559a98852768 <col:10, line:9:1>
-//     `-CallExpr 0x559a98852720 <line:6:3, col:26> 'int'
-//       |-ImplicitCastExpr 0x559a98852708 <col:3> 'int (*)(const char *__restrict, ...)' <FunctionToPointerDecay>
-//       | `-DeclRefExpr 0x559a98852690 <col:3> 'int (const char *__restrict, ...)' lvalue Function 0x559a98837ef8 'printf' 'int (const char *__restrict, ...)'
-//       |-ImplicitCastExpr 0x559a98852750 <col:10> 'const char *' <ArrayToPointerDecay>
-//       | `-StringLiteral 0x559a98852648 <col:10> 'const char [10]' lvalue "Hello %d\n"
-//       `-IntegerLiteral 0x559a98852670 <col:24> 'int' 42
-
-//    |-CXXOperatorCallExpr 0x55dda8d48be8 <line:24:5, col:20> 'void' '()'
-//    | |-ImplicitCastExpr 0x55dda8d48bb8 <col:10, col:20> 'void (*)(const char *)' <FunctionToPointerDecay>
-//    | | `-DeclRefExpr 0x55dda8d48b68 <col:10, col:20> 'void (const char *)' lvalue CXXMethod 0x55dda8d48a68 'operator()' 'void (const char *)'
-//    | |-DeclRefExpr 0x55dda8d48848 <col:5> 'NullTrace' lvalue Var 0x55dda8d1ad88 'TRACE' 'NullTrace'
-//    | `-ImplicitCastExpr 0x55dda8d48bd0 <col:11> 'const char *' <ArrayToPointerDecay>
-//    |   `-StringLiteral 0x55dda8d488e8 <col:11> 'const char [7]' lvalue "Hello\n"
-
 void PrintfConvertCheck::registerMatchers(MatchFinder *Finder) {
     StatementMatcher PrintfMatcher =
         traverse(TK_AsIs,
@@ -107,8 +91,6 @@ class FormatStringConverter : public clang::analyze_format_string::FormatStringH
             result += ch;
     }
     result.push_back('\"');
-
-    llvm::outs() << "getStandardFormatString is \"" << StandardFormatString << "\"\n";
     return result;
   }
 };
@@ -117,10 +99,6 @@ bool FormatStringConverter::HandlePrintfSpecifier(const analyze_printf::PrintfSp
                                                          const char *startSpecifier,
                                                          unsigned specifierLen) {
   using namespace analyze_printf;
-
-  llvm::outs() << "Specifier at " << startSpecifier - PrintfFormatString.data() << " for " << specifierLen << "\n";
-  llvm::outs() << "PrintfFormatStringPos is " << PrintfFormatStringPos << "\n";
-  llvm::outs() << "StandardFormatString is \"" << StandardFormatString << "\"\n";
 
   const size_t StartSpecifierPos = startSpecifier - PrintfFormatString.data();
   assert(StartSpecifierPos + specifierLen <= PrintfFormatString.size());
@@ -179,23 +157,9 @@ bool FormatStringConverter::HandlePrintfSpecifier(const analyze_printf::PrintfSp
 }
 
 void PrintfConvertCheck::check(const MatchFinder::MatchResult &Result) {
-  llvm::outs() << "printf call\n";
   const auto *PrintfCall = Result.Nodes.getNodeAs<CallExpr>("printf")->getCallee();
-  assert(PrintfCall);
-  PrintfCall->dumpPretty(*Result.Context);
-  llvm::outs() << "\n\n";
-
-  llvm::outs() << "Format string\n";
   const auto *Format = Result.Nodes.getNodeAs<clang::StringLiteral>("format");
-  Format->dumpPretty(*Result.Context);
-  llvm::outs() << "\n\n";
-
-
   const StringRef FormatString = Format->getString();
-
-  llvm::outs() << "Format getstring: " << FormatString << "\n";
-
-  llvm::outs() << "Format getbytes: " << Format->getBytes() << "\n";
 
   FormatStringConverter Handler(FormatString);
   LangOptions LO;
