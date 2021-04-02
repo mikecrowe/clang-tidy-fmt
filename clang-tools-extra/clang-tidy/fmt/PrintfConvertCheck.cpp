@@ -51,6 +51,7 @@ class FormatStringConverter : public clang::analyze_format_string::FormatStringH
   size_t PrintfFormatStringPos = 0U;
   const StringRef PrintfFormatString;
   std::string StandardFormatString;
+  bool NeededRewriting = false;
 
   public:
   explicit FormatStringConverter(const StringRef PrintfFormatStringIn)
@@ -62,6 +63,10 @@ class FormatStringConverter : public clang::analyze_format_string::FormatStringH
   bool HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier &FS,
                                      const char *startSpecifier,
                              unsigned specifierLen) override;
+
+  bool neededRewriting() const {
+    return NeededRewriting;
+  }
 
   std::string getStandardFormatString() && {
     StandardFormatString.append(PrintfFormatString.begin() + PrintfFormatStringPos, PrintfFormatString.end());
@@ -157,12 +162,14 @@ bool FormatStringConverter::HandlePrintfSpecifier(const analyze_printf::PrintfSp
   // Skip over specifier
   PrintfFormatStringPos = StartSpecifierPos + specifierLen;
   assert(PrintfFormatStringPos <= PrintfFormatString.size());
+
+  NeededRewriting = true;
   return true;
 }
 
 void PrintfConvertCheck::check(const MatchFinder::MatchResult &Result) {
   llvm::outs() << "printf call\n";
-  const auto *PrintfCall = Result.Nodes.getNodeAs<CallExpr>("printf");
+  const auto *PrintfCall = Result.Nodes.getNodeAs<CallExpr>("printf")->getCallee();
   assert(PrintfCall);
   PrintfCall->dumpPretty(*Result.Context);
   llvm::outs() << "\n\n";
@@ -172,61 +179,33 @@ void PrintfConvertCheck::check(const MatchFinder::MatchResult &Result) {
   Format->dumpPretty(*Result.Context);
   llvm::outs() << "\n\n";
 
-  using clang::analyze_format_string::ParsePrintfString;
-  //  using clang::analyze_format_string::FormatStringHandler;
 
   const StringRef FormatString = Format->getString();
 
   llvm::outs() << "Format getstring: " << FormatString << "\n";
 
+  llvm::outs() << "Format getbytes: " << Format->getBytes() << "\n";
+
   FormatStringConverter Handler(FormatString);
   LangOptions LO;
-  const bool isFreeBSDKPrintf = false;
+  const bool IsFreeBsdkPrintf = false;
 
-  if (ParsePrintfString(Handler,
-                        FormatString.data(), FormatString.data() + FormatString.size(),
-                        LO, Result.Context->getTargetInfo(), isFreeBSDKPrintf)) {
-    printf("Success\n");
+  using clang::analyze_format_string::ParsePrintfString;
+  ParsePrintfString(Handler,
+                    FormatString.data(), FormatString.data() + FormatString.size(),
+                    LO, Result.Context->getTargetInfo(), IsFreeBsdkPrintf);
+
+  DiagnosticBuilder Diag = diag(PrintfCall->getBeginLoc(), "Replace printf with fmt::print");
+  Diag << FixItHint::CreateReplacement(CharSourceRange::getTokenRange(PrintfCall->getBeginLoc(),
+                                                                      PrintfCall->getEndLoc()),
+                                       "fmt::print");
+
+  if (Handler.neededRewriting()) {
+    const auto StandardFormatString = std::move(Handler).getStandardFormatString();
+    Diag << FixItHint::CreateReplacement(CharSourceRange::getTokenRange(Format->getBeginLoc(),
+                                                                        Format->getEndLoc()),
+                                         StandardFormatString);
   }
-  else {
-    printf("Failure\n");
-  }
-
-#if 0
-  auto ReplacementFormatString = clang::StringLiteral::Create(Result.Context,
-                                                              FormatString.getKind(),
-                                                              FormatString.isPascal(), ...);
-#endif
-
-  diag(Format->getBeginLoc(),
-       "replace format string")
-      << FixItHint::CreateReplacement(CharSourceRange::getTokenRange(Format->getBeginLoc(),
-                                                                     Format->getEndLoc()),
-                                      std::move(Handler).getStandardFormatString());
-#if 0
-  const auto *Op = Result.Nodes.getNodeAs<CXXOperatorCallExpr>("Op");
-  const auto *Call = Result.Nodes.getNodeAs<CallExpr>("Call");
-  assert(Op != nullptr && Call != nullptr && "Matcher does not work as expected");
-
-  // Handles the case 'x = absl::StrCat(x)', which has no effect.
-  if (Call->getNumArgs() == 1) {
-    diag(Op->getBeginLoc(), "call to 'absl::StrCat' has no effect");
-    return;
-  }
-
-  // Emit a warning and emit fixits to go from
-  //   x = absl::StrCat(x, ...)
-  // to
-  //   absl::StrAppend(&x, ...)
-  diag(Op->getBeginLoc(),
-       "call 'absl::StrAppend' instead of 'absl::StrCat' when appending to a "
-       "string to avoid a performance penalty")
-      << FixItHint::CreateReplacement(
-             CharSourceRange::getTokenRange(Op->getBeginLoc(),
-                                            Call->getCallee()->getEndLoc()),
-             "absl::StrAppend")
-      << FixItHint::CreateInsertion(Call->getArg(0)->getBeginLoc(), "&");
-#endif
 }
 
 }  // namespace fmt
