@@ -5,6 +5,7 @@ set(LLVM_LINK_COMPONENTS
 
 add_clang_library(clangTidyFmtModule
   FmtTidyModule.cpp
+  FormatStringConverter.cpp
   PrintfConvertCheck.cpp
   TraceConverterCheck.cpp
 
