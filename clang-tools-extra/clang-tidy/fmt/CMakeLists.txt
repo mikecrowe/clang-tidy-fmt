@@ -7,7 +7,7 @@ add_clang_library(clangTidyFmtModule
   FmtTidyModule.cpp
   FormatStringConverter.cpp
   PrintfConvertCheck.cpp
-  TraceConverterCheck.cpp
+  TraceConvertCheck.cpp
 
   LINK_LIBS
   clangTidy
