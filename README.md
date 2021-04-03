@@ -27,6 +27,13 @@ do a bad job, but it's not perfect. In particular:
 * It has too few tests in
   clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp.
 
+* I'd really like to unit test `FormatStringConverter` rather than doing
+  everything in the fmt-printf-convert.cpp tests. This mainly because
+  clang-tidy takes so long to link on my machine that the test cycle is far
+  too long! In order to do so I need a way to create a `TargetInfo`
+  instance to pass to `ParsePrintfString`. Any advice on how to do so
+  gratefully received.
+
 ## How it works
 
 There are no clang-tidy checks for fmt yet, so I've added
