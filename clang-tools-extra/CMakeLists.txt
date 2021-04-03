@@ -34,5 +34,4 @@ CMAKE_DEPENDENT_OPTION(CLANG_ENABLE_CLANGD "Build clangd language server" ON
 if (CLANG_ENABLE_CLANGD)
   add_subdirectory(clangd)
 endif()
-#add_subdirectory(loop-convert)
 add_subdirectory(trace-convert)
