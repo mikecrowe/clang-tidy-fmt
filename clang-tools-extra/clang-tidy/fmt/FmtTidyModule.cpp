@@ -9,7 +9,7 @@
 #include "../ClangTidy.h"
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
-#include "TraceConverterCheck.h"
+#include "TraceConvertCheck.h"
 #include "PrintfConvertCheck.h"
 
 namespace clang {
@@ -20,7 +20,7 @@ class FmtModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
     CheckFactories.registerCheck<TraceConverterCheck>(
-        "fmt-trace-converter");
+        "fmt-trace-convert");
     CheckFactories.registerCheck<PrintfConvertCheck>(
         "fmt-printf-convert");
   }
