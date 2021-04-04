@@ -51,4 +51,4 @@ translating the format strings. After that, the check in
 `fmt::print`, call `printfFormatStringToFmtString` and replace the format
 string if necessary.
 
-[1] https://github.com/llvm/llvm-project
+[1]: https://github.com/llvm/llvm-project
