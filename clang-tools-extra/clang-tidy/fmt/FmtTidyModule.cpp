@@ -11,6 +11,7 @@
 #include "../ClangTidyModuleRegistry.h"
 #include "TraceConvertCheck.h"
 #include "PrintfConvertCheck.h"
+#include "StrPrintfConvertCheck.h"
 
 namespace clang {
 namespace tidy {
@@ -23,6 +24,8 @@ public:
         "fmt-trace-convert");
     CheckFactories.registerCheck<PrintfConvertCheck>(
         "fmt-printf-convert");
+    CheckFactories.registerCheck<StrPrintfConvertCheck>(
+        "fmt-strprintf-convert");
   }
 };
 
