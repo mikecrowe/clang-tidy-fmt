@@ -34,6 +34,13 @@ do a bad job, but it's not perfect. In particular:
   instance to pass to `ParsePrintfString`. Any advice on how to do so
   gratefully received.
 
+## Usage:
+
+Build clang-tidy following the [upstream instructions][1]. Install it if
+you wish, or just run from the build directory with something like:
+
+    bin/clang-tidy -checks='-*,fmt-printf-convert' --fix printf.cpp
+
 ## How it works
 
 There are no clang-tidy checks for fmt yet, so I've added
