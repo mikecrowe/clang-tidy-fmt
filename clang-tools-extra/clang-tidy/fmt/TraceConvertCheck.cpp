@@ -18,13 +18,6 @@ namespace clang {
 namespace tidy {
 namespace fmt {
 
-//    |-CXXOperatorCallExpr 0x55dda8d48be8 <line:24:5, col:20> 'void' '()'
-//    | |-ImplicitCastExpr 0x55dda8d48bb8 <col:10, col:20> 'void (*)(const char *)' <FunctionToPointerDecay>
-//    | | `-DeclRefExpr 0x55dda8d48b68 <col:10, col:20> 'void (const char *)' lvalue CXXMethod 0x55dda8d48a68 'operator()' 'void (const char *)'
-//    | |-DeclRefExpr 0x55dda8d48848 <col:5> 'BaseTrace' lvalue Var 0x55dda8d1ad88 'TRACE' 'BaseTrace'
-//    | `-ImplicitCastExpr 0x55dda8d48bd0 <col:11> 'const char *' <ArrayToPointerDecay>
-//    |   `-StringLiteral 0x55dda8d488e8 <col:11> 'const char [7]' lvalue "Hello\n"
-
 void TraceConverterCheck::registerMatchers(MatchFinder *Finder) {
   const auto DerivedTraceClassExpr = expr(hasType(cxxRecordDecl(isDerivedFrom("::BaseTrace"))));
   const auto TraceClassExpr = expr(hasType(cxxRecordDecl(hasName("::BaseTrace"))));
