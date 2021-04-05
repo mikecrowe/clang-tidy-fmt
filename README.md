@@ -1,8 +1,9 @@
 # clang-tidy fmt checks
 
 This "fork" of [llvm-project][1] adds a proof-of-concept clang-tidy checker
-that converts occurrences of printf and fprintf to fmt::print and modifies
-the format string appropriately. In other words, it turns:
+that converts occurrences of printf and fprintf to fmt::print (as provided
+by the [{fmt}][2] library) and modifies the format string appropriately. In
+other words, it turns:
 
 ```C++
 fprintf(stderr, "The %s is %3d\n", answer, value);
@@ -17,11 +18,12 @@ It doesn't do a bad job, but it's not perfect. In particular:
 * At the point that the check runs, the AST contains a single
   `StringLiteral` for the format string and any macro expansion, token
   pasting, adjacent string literal concatenation and escaping has been
-  handled. Although it's possible to put the escapes back, they may not be
-  exactly as they were written (e.g. "\x0a" will become "\n".) It turns out
-  that it's probably quite important that macro expansion and adjacent
-  string literal concatenation happen before we parse the format string in
-  order to cope with the <inttypes.h> PRI macros.
+  handled. Although it's possible for the check to automatically put the
+  escapes back, they may not be exactly as they were written (e.g. "\x0a"
+  will become "\n".) It turns out that it's probably quite important that
+  macro expansion and adjacent string literal concatenation happen before
+  we parse the format string in order to cope with the <inttypes.h> PRI
+  macros.
 
 * It tries to support field widths, positional arguments and alternative
   forms. It doesn't support padding or precision, among other things, yet.
@@ -115,4 +117,12 @@ Once you've built everything, run something like:
 
     bin/llvm-lit -v ../clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp
 
+
+## The Future
+
+The [{fmt}][2] library is gradually being standardised. `fmt::format` is in
+C++20 as `std::format`. It would not be hard to adapt these checks to
+convert to the standard versions instead.
+
 [1]: https://github.com/llvm/llvm-project
+[2]: https://fmt.dev/
