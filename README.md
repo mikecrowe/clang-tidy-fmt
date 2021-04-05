@@ -44,6 +44,9 @@ It doesn't do a bad job, but it's not perfect. In particular:
   instance to pass to `ParsePrintfString`. Any advice on how to do so
   gratefully received.
 
+* It's not separated into easily-understandable commits with good commit
+  messages yet.
+
 ## Usage:
 
 Build clang-tidy following the [upstream instructions][1]. Install it if
