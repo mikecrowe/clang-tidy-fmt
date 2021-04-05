@@ -1,4 +1,4 @@
-# clang-tidy printf->fmt::print converter
+# clang-tidy fmt checks
 
 This "fork" of [llvm-project][1] adds a proof-of-concept clang-tidy checker
 that converts occurrences of printf and fprintf to fmt::print and modifies
