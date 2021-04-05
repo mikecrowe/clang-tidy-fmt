@@ -1,4 +1,4 @@
-//===--- TraceConverterCheck.cpp - clang-tidy--------------------------------===//
+//===--- TraceConverterCheck.cpp -clang-tidy---------------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -19,15 +19,17 @@ namespace tidy {
 namespace fmt {
 
 void TraceConverterCheck::registerMatchers(MatchFinder *Finder) {
-  const auto DerivedTraceClassExpr = expr(hasType(cxxRecordDecl(isDerivedFrom("::BaseTrace"))));
-  const auto TraceClassExpr = expr(hasType(cxxRecordDecl(hasName("::BaseTrace"))));
+  const auto DerivedTraceClassExpr =
+      expr(hasType(cxxRecordDecl(isDerivedFrom("::BaseTrace"))));
+  const auto TraceClassExpr =
+      expr(hasType(cxxRecordDecl(hasName("::BaseTrace"))));
 
-  StatementMatcher TraceMatcher =
-      traverse(TK_AsIs,
-               cxxOperatorCallExpr(hasOverloadedOperatorName("()"),
-                                   hasArgument(0, anyOf(TraceClassExpr, DerivedTraceClassExpr)),
-                                   hasArgument(1, stringLiteral().bind("format"))
-                                   ).bind("trace"));
+  StatementMatcher TraceMatcher = traverse(
+      TK_AsIs, cxxOperatorCallExpr(
+                   hasOverloadedOperatorName("()"),
+                   hasArgument(0, anyOf(TraceClassExpr, DerivedTraceClassExpr)),
+                   hasArgument(1, stringLiteral().bind("format")))
+                   .bind("trace"));
 
   Finder->addMatcher(TraceMatcher, this);
 }
@@ -52,15 +54,15 @@ void TraceConverterCheck::check(const MatchFinder::MatchResult &Result) {
   const auto MaybeReplacementFormatString =
       printfFormatStringToFmtString(Result.Context, FormatString);
   if (MaybeReplacementFormatString) {
-      DiagnosticBuilder Diag =
-          diag(Format->getBeginLoc(), "Replace TRACE format string");
-      Diag << FixItHint::CreateReplacement(
-          CharSourceRange::getTokenRange(Format->getBeginLoc(),
-                                         Format->getEndLoc()),
-          *MaybeReplacementFormatString);
+    DiagnosticBuilder Diag =
+        diag(Format->getBeginLoc(), "Replace TRACE format string");
+    Diag << FixItHint::CreateReplacement(
+        CharSourceRange::getTokenRange(Format->getBeginLoc(),
+                                       Format->getEndLoc()),
+        *MaybeReplacementFormatString);
   }
 }
 
-}  // namespace fmt
-}  // namespace tidy
-}  // namespace clang
+} // namespace fmt
+} // namespace tidy
+} // namespace clang

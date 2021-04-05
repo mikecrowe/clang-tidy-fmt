@@ -9,9 +9,9 @@
 #include "../ClangTidy.h"
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
-#include "TraceConvertCheck.h"
 #include "PrintfConvertCheck.h"
 #include "StrPrintfConvertCheck.h"
+#include "TraceConvertCheck.h"
 
 namespace clang {
 namespace tidy {
@@ -20,10 +20,8 @@ namespace fmt {
 class FmtModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
-    CheckFactories.registerCheck<TraceConverterCheck>(
-        "fmt-trace-convert");
-    CheckFactories.registerCheck<PrintfConvertCheck>(
-        "fmt-printf-convert");
+    CheckFactories.registerCheck<TraceConverterCheck>("fmt-trace-convert");
+    CheckFactories.registerCheck<PrintfConvertCheck>("fmt-printf-convert");
     CheckFactories.registerCheck<StrPrintfConvertCheck>(
         "fmt-strprintf-convert");
   }
@@ -31,7 +29,7 @@ public:
 
 // Register the FmtModule using this statically initialized variable.
 static ClangTidyModuleRegistry::Add<FmtModule> X("fmt-module",
-                                                    "Add {fmt} library checks.");
+                                                 "Add {fmt} library checks.");
 
 } // namespace fmt
 
