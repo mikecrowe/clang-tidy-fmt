@@ -38,11 +38,10 @@ It doesn't do a bad job, but it's not perfect. In particular:
   clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp.
 
 * I'd really like to unit test `FormatStringConverter` rather than doing
-  everything in the fmt-printf-convert.cpp tests. This mainly because
-  clang-tidy takes so long to link on my machine that the test cycle is far
-  too long! In order to do so I need a way to create a `TargetInfo`
-  instance to pass to `ParsePrintfString`. Any advice on how to do so
-  gratefully received.
+  everything in the LIT tests. This mainly because clang-tidy takes so long
+  to link on my machine that the test cycle is far too long! In order to do
+  so I need a way to create a `TargetInfo` instance to pass to
+  `ParsePrintfString`. Any advice on how to do so gratefully received.
 
 * It's not separated into easily-understandable commits with good commit
   messages yet.
@@ -109,5 +108,11 @@ TRACE2("{}\n", name);
 
 (It is assumed that the implementation of `BaseTrace` will be modified at
 the same time to expect the new form of format string.)
+
+## Running the LIT tests
+
+Once you've built everything, run something like:
+
+    bin/llvm-lit -v ../clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp
 
 [1]: https://github.com/llvm/llvm-project
