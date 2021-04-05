@@ -1,6 +1,6 @@
 // RUN: %check_clang_tidy %s fmt-trace-convert %t
 
-class NullTrace
+class BaseTrace
 {
 public:
     template <typename... Args>
@@ -19,11 +19,11 @@ public:
     }
 };
 
-class DerivedTrace : public NullTrace
+class DerivedTrace : public BaseTrace
 {
 };
 
-NullTrace TRACE;
+BaseTrace TRACE;
 DerivedTrace TRACE2;
 
 int main()
