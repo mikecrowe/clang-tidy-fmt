@@ -64,6 +64,26 @@ void printf_field_width() {
   // CHECK-FIXES: fmt::print("Hello {2:{1}} after\n", 5, 424242);
 }
 
+void printf_precision() {
+  printf("Hello %.3f\n", 3.14159);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Hello {:.3}\n", 3.14159);
+
+  printf("Hello %.*f after\n", 4, 3.14159265358979323846);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Hello {:.{}} after\n", 4, 3.14159265358979323846);
+
+  printf("Hello %1$.*2$f after\n", 3.14159265358979323846, 4);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Hello {1:.{2}} after\n", 3.14159265358979323846, 4);
+}
+
+void printf_field_width_and_precision() {
+  printf("Hello %1$*2$.*3$f after\n", 3.14159265358979323846, 4, 2);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Hello {1:{2}.{3}} after\n", 3.14159265358979323846, 4, 2);
+}
+
 void printf_alternative_form() {
   printf("Wibble %#x\n", 42);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
