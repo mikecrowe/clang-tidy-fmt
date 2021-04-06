@@ -71,21 +71,44 @@ bool FormatStringConverter::HandlePrintfSpecifier(
       FormatSpec.push_back('#');
     }
 
-    const OptionalAmount FieldWidth = FS.getFieldWidth();
-    switch (FieldWidth.getHowSpecified()) {
-    case OptionalAmount::NotSpecified:
-      break;
-    case OptionalAmount::Constant:
-      FormatSpec.append(llvm::utostr(FieldWidth.getConstantAmount()));
-      break;
-    case OptionalAmount::Arg:
-      FormatSpec.push_back('{');
-      if (FieldWidth.usesPositionalArg())
-        FormatSpec.append(llvm::utostr(FieldWidth.getPositionalArgIndex()));
-      FormatSpec.push_back('}');
-      break;
-    case OptionalAmount::Invalid:
-      break;
+    {
+      const OptionalAmount FieldWidth = FS.getFieldWidth();
+      switch (FieldWidth.getHowSpecified()) {
+      case OptionalAmount::NotSpecified:
+        break;
+      case OptionalAmount::Constant:
+        FormatSpec.append(llvm::utostr(FieldWidth.getConstantAmount()));
+        break;
+      case OptionalAmount::Arg:
+        FormatSpec.push_back('{');
+        if (FieldWidth.usesPositionalArg())
+          FormatSpec.append(llvm::utostr(FieldWidth.getPositionalArgIndex()));
+        FormatSpec.push_back('}');
+        break;
+      case OptionalAmount::Invalid:
+        break;
+      }
+    }
+
+    {
+      const OptionalAmount FieldPrecision = FS.getPrecision();
+      switch (FieldPrecision.getHowSpecified()) {
+      case OptionalAmount::NotSpecified:
+        break;
+      case OptionalAmount::Constant:
+        FormatSpec.push_back('.');
+        FormatSpec.append(llvm::utostr(FieldPrecision.getConstantAmount()));
+        break;
+      case OptionalAmount::Arg:
+        FormatSpec.push_back('.');
+        FormatSpec.push_back('{');
+        if (FieldPrecision.usesPositionalArg())
+          FormatSpec.append(llvm::utostr(FieldPrecision.getPositionalArgIndex()));
+        FormatSpec.push_back('}');
+        break;
+      case OptionalAmount::Invalid:
+        break;
+      }
     }
 
     if (!FormatSpec.empty()) {
