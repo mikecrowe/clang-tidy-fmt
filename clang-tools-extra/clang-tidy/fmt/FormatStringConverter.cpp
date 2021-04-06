@@ -62,8 +62,12 @@ bool FormatStringConverter::HandlePrintfSpecifier(
   else {
     StandardFormatString.push_back('{');
 
-    if (FS.usesPositionalArg())
-      StandardFormatString.append(llvm::utostr(FS.getPositionalArgIndex()));
+    if (FS.usesPositionalArg()) {
+      // fmt argument identifiers are zero based, whereas printf ones are
+      // one based.
+      assert(FS.getPositionalArgIndex() > 0U);
+      StandardFormatString.append(llvm::utostr(FS.getPositionalArgIndex() - 1));
+    }
 
     std::string FormatSpec;
 
@@ -81,8 +85,12 @@ bool FormatStringConverter::HandlePrintfSpecifier(
         break;
       case OptionalAmount::Arg:
         FormatSpec.push_back('{');
-        if (FieldWidth.usesPositionalArg())
-          FormatSpec.append(llvm::utostr(FieldWidth.getPositionalArgIndex()));
+        if (FieldWidth.usesPositionalArg()) {
+          // fmt argument identifiers are zero based, whereas printf ones are
+          // one based.
+          assert(FieldWidth.getPositionalArgIndex() > 0U);
+          FormatSpec.append(llvm::utostr(FieldWidth.getPositionalArgIndex() - 1));
+        }
         FormatSpec.push_back('}');
         break;
       case OptionalAmount::Invalid:
@@ -102,8 +110,12 @@ bool FormatStringConverter::HandlePrintfSpecifier(
       case OptionalAmount::Arg:
         FormatSpec.push_back('.');
         FormatSpec.push_back('{');
-        if (FieldPrecision.usesPositionalArg())
-          FormatSpec.append(llvm::utostr(FieldPrecision.getPositionalArgIndex()));
+        if (FieldPrecision.usesPositionalArg()) {
+          // fmt argument identifiers are zero based, whereas printf ones are
+          // one based.
+          assert(FieldPrecision.getPositionalArgIndex() > 0U);
+          FormatSpec.append(llvm::utostr(FieldPrecision.getPositionalArgIndex() - 1));
+        }
         FormatSpec.push_back('}');
         break;
       case OptionalAmount::Invalid:

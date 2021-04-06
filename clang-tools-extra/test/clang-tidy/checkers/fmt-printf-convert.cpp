@@ -47,7 +47,7 @@ void printf_double() {
 void printf_positional_arg() {
   printf("Hello %2$d %1$s\n", "Goodbye", 42);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Hello {2} {1}\n", "Goodbye", 42);
+  // CHECK-FIXES: fmt::print("Hello {1} {0}\n", "Goodbye", 42);
 }
 
 void printf_field_width() {
@@ -61,7 +61,7 @@ void printf_field_width() {
 
   printf("Hello %2$*1$d after\n", 5, 424242);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Hello {2:{1}} after\n", 5, 424242);
+  // CHECK-FIXES: fmt::print("Hello {1:{0}} after\n", 5, 424242);
 }
 
 void printf_precision() {
@@ -75,13 +75,13 @@ void printf_precision() {
 
   printf("Hello %1$.*2$f after\n", 3.14159265358979323846, 4);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Hello {1:.{2}} after\n", 3.14159265358979323846, 4);
+  // CHECK-FIXES: fmt::print("Hello {0:.{1}} after\n", 3.14159265358979323846, 4);
 }
 
 void printf_field_width_and_precision() {
   printf("Hello %1$*2$.*3$f after\n", 3.14159265358979323846, 4, 2);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Hello {1:{2}.{3}} after\n", 3.14159265358979323846, 4, 2);
+  // CHECK-FIXES: fmt::print("Hello {0:{1}.{2}} after\n", 3.14159265358979323846, 4, 2);
 }
 
 void printf_alternative_form() {
