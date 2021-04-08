@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "FormatStringConverter.h"
+#include "clang/AST/Expr.h"
 #include "clang/AST/FormatString.h"
 #include "clang/Basic/LangOptions.h"
 #include "llvm/ADT/StringExtras.h"
@@ -23,13 +24,18 @@ class FormatStringConverter
     : public clang::analyze_format_string::FormatStringHandler {
   size_t PrintfFormatStringPos = 0U;
   const StringRef PrintfFormatString;
+  const Expr * const *PrintfArgs;
+  const unsigned PrintfNumArgs;
   std::string StandardFormatString;
   bool ConversionPossible = true;
   bool NeededRewriting = false;
 
 public:
-  explicit FormatStringConverter(const StringRef PrintfFormatStringIn)
-      : PrintfFormatString(PrintfFormatStringIn) {
+  explicit FormatStringConverter(const StringRef PrintfFormatStringIn,
+                                 const Expr *const *PrintfArgsIn,
+                                 unsigned PrintfNumArgsIn)
+      : PrintfFormatString(PrintfFormatStringIn), PrintfArgs(PrintfArgsIn),
+        PrintfNumArgs(PrintfNumArgsIn) {
     // Assume that the output will be approximately the same size as the input,
     // but perhaps with a few escapes expanded.
     StandardFormatString.reserve(PrintfFormatString.size() + 8);
@@ -126,6 +132,13 @@ bool FormatStringConverter::HandlePrintfSpecifier(
     }
 
     {
+      if (FS.getArgIndex() > PrintfNumArgs) {
+        // Argument index out of range. Give up.
+        ConversionPossible = false;
+        return false;
+      }
+
+      const Expr *Arg = PrintfArgs[FS.getArgIndex()]->IgnoreImplicitAsWritten();
       using analyze_format_string::ConversionSpecifier;
       const ConversionSpecifier spec = FS.getConversionSpecifier();
       switch (spec.getKind()) {
@@ -137,9 +150,16 @@ bool FormatStringConverter::HandlePrintfSpecifier(
         // Strings never need to be specified
         break;
       case ConversionSpecifier::Kind::cArg:
+        // Only specify char if the argument is of a different type
+        if (!Arg->getType()->isCharType())
+          FormatSpec.push_back('c');
+        llvm::outs() << "c arg " << FS.getArgIndex() << "\n";
+        break;
       case ConversionSpecifier::Kind::dArg:
       case ConversionSpecifier::Kind::iArg:
-        // TODO: Detect whether the d is necessary
+        // Only specify integer if the argument is of a different type
+        if (Arg->getType()->isCharType() || !Arg->getType()->isIntegerType())
+          FormatSpec.push_back('d');
         break;
       case ConversionSpecifier::Kind::pArg:
         // Pointers don't need a specifier
@@ -241,8 +261,10 @@ std::string FormatStringConverter::getStandardFormatString() && {
 
 FormatStringResult
 printfFormatStringToFmtString(const ASTContext *Context,
-                              const llvm::StringRef PrintfFormatString) {
-  FormatStringConverter Handler{PrintfFormatString};
+                              const llvm::StringRef PrintfFormatString,
+                              const Expr * const *PrintfArgs,
+                              unsigned PrintfNumArgs) {
+  FormatStringConverter Handler{PrintfFormatString, PrintfArgs, PrintfNumArgs};
   LangOptions LO;
   const bool IsFreeBsdkPrintf = false;
 

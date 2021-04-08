@@ -25,16 +25,20 @@ void StrPrintfConvertCheck::registerMatchers(MatchFinder *Finder) {
 }
 
 void StrPrintfConvertCheck::check(const MatchFinder::MatchResult &Result) {
-  const auto *StrPrintfCall =
-      Result.Nodes.getNodeAs<CallExpr>("strprintf")->getCallee();
+  const unsigned FormatArgOffset = 1;
+  const auto *StrPrintf = Result.Nodes.getNodeAs<CallExpr>("strprintf");
+  const auto *StrPrintfCall = StrPrintf->getCallee();
+  const auto *StrPrintfArgs = StrPrintf->getArgs();
+  const auto StrPrintfNumArgs = StrPrintf->getNumArgs();
   const auto *Format = Result.Nodes.getNodeAs<clang::StringLiteral>("format");
   const StringRef FormatString = Format->getString();
 
-  auto ReplacementFormat =
-      printfFormatStringToFmtString(Result.Context, FormatString);
+  auto ReplacementFormat = printfFormatStringToFmtString(
+      Result.Context, FormatString, StrPrintfArgs + FormatArgOffset,
+      StrPrintfNumArgs - FormatArgOffset);
   if (ReplacementFormat.isSuitable()) {
-    DiagnosticBuilder Diag =
-        diag(StrPrintfCall->getBeginLoc(), "Replace strprintf with fmt::format");
+    DiagnosticBuilder Diag = diag(StrPrintfCall->getBeginLoc(),
+                                  "Replace strprintf with fmt::format");
     Diag << FixItHint::CreateReplacement(
         CharSourceRange::getTokenRange(StrPrintfCall->getBeginLoc(),
                                        StrPrintfCall->getEndLoc()),

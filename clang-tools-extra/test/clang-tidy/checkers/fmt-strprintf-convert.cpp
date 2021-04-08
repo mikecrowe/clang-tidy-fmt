@@ -17,3 +17,9 @@ string strprintf_complex(const char *name, double value) {
   // CHECK-MESSAGES: [[@LINE-1]]:10: warning: Replace strprintf with fmt::format [fmt-strprintf-convert]
   // CHECK-FIXES: return fmt::format("'{}'='{:f}'", name, value);
 }
+
+string strprintf_integer_conversions() {
+  return strprintf("int:%d int:%d char:%c char:%c", 65, 'A', 66, 'B');
+  // CHECK-MESSAGES: [[@LINE-1]]:10: warning: Replace strprintf with fmt::format [fmt-strprintf-convert]
+  // CHECK-FIXES: return fmt::format("int:{} int:{:d} char:{:c} char:{}", 65, 'A', 66, 'B');
+}
