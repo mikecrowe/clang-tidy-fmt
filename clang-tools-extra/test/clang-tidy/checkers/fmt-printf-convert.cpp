@@ -26,10 +26,30 @@ void printf_percent() {
   // CHECK-FIXES: fmt::print("Hello % and another %");
 }
 
+void printf_unsupported() {
+  int pos;
+  printf("%d %n %d\n", 42, &pos, 72);
+  // fmt doesn't do the equivalent of %n, so leave the call alone.
+}
+
 void printf_integer() {
   printf("Hello %d after\n", 42);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
   // CHECK-FIXES: fmt::print("Hello {} after\n", 42);
+}
+
+void printf_bases() {
+  printf("Hex %lx %#lx\n", 42L, 42L);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Hex {:x} {:#x}\n", 42L, 42L);
+
+  printf("HEX %X %#X\n", 42, 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("HEX {:X} {:#X}\n", 42, 42);
+
+  printf("Oct %lo %#lo\n", 42L, 42L);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Oct {:o} {:#o}\n", 42L, 42L);
 }
 
 void printf_string() {
@@ -41,7 +61,21 @@ void printf_string() {
 void printf_double() {
   printf("Hello %f after\n", 42.0);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Hello {} after\n", 42.0);
+  // CHECK-FIXES: fmt::print("Hello {:f} after\n", 42.0);
+
+  printf("Hello %g after\n", 42.0);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Hello {:g} after\n", 42.0);
+
+  printf("Hello %e after\n", 42.0);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Hello {:e} after\n", 42.0);
+}
+
+void printf_pointer() {
+  printf("Void %p\n", NULL);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Void {}\n", NULL);
 }
 
 void printf_positional_arg() {
@@ -67,25 +101,25 @@ void printf_field_width() {
 void printf_precision() {
   printf("Hello %.3f\n", 3.14159);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Hello {:.3}\n", 3.14159);
+  // CHECK-FIXES: fmt::print("Hello {:.3f}\n", 3.14159);
 
   printf("Hello %.*f after\n", 4, 3.14159265358979323846);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Hello {:.{}} after\n", 4, 3.14159265358979323846);
+  // CHECK-FIXES: fmt::print("Hello {:.{}f} after\n", 4, 3.14159265358979323846);
 
   printf("Hello %1$.*2$f after\n", 3.14159265358979323846, 4);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Hello {0:.{1}} after\n", 3.14159265358979323846, 4);
+  // CHECK-FIXES: fmt::print("Hello {0:.{1}f} after\n", 3.14159265358979323846, 4);
 }
 
 void printf_field_width_and_precision() {
   printf("Hello %1$*2$.*3$f after\n", 3.14159265358979323846, 4, 2);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Hello {0:{1}.{2}} after\n", 3.14159265358979323846, 4, 2);
+  // CHECK-FIXES: fmt::print("Hello {0:{1}.{2}f} after\n", 3.14159265358979323846, 4, 2);
 }
 
 void printf_alternative_form() {
   printf("Wibble %#x\n", 42);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Wibble {:#}\n", 42);
+  // CHECK-FIXES: fmt::print("Wibble {:#x}\n", 42);
 }
