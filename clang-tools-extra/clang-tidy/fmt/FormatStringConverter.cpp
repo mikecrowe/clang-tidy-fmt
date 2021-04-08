@@ -24,6 +24,7 @@ class FormatStringConverter
   size_t PrintfFormatStringPos = 0U;
   const StringRef PrintfFormatString;
   std::string StandardFormatString;
+  bool ConversionPossible = true;
   bool NeededRewriting = false;
 
 public:
@@ -37,6 +38,7 @@ public:
   bool HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier &FS,
                              const char *StartSpecifier,
                              unsigned SpecifierLen) override;
+  bool isConversionPossible() const { return ConversionPossible; }
   bool neededRewriting() const { return NeededRewriting; }
   std::string getStandardFormatString() &&;
 };
@@ -177,7 +179,7 @@ std::string FormatStringConverter::getStandardFormatString() && {
   return result;
 }
 
-llvm::Optional<std::string>
+FormatStringResult
 printfFormatStringToFmtString(const ASTContext *Context,
                               const llvm::StringRef PrintfFormatString) {
   FormatStringConverter Handler{PrintfFormatString};
@@ -189,10 +191,11 @@ printfFormatStringToFmtString(const ASTContext *Context,
                     PrintfFormatString.data() + PrintfFormatString.size(), LO,
                     Context->getTargetInfo(), IsFreeBsdkPrintf);
 
+  if (!Handler.isConversionPossible())
+    return { FormatStringResult::Kind::unsuitable };
   if (Handler.neededRewriting())
     return std::move(Handler).getStandardFormatString();
-  else
-    return {};
+  return { FormatStringResult::Kind::unchanged };
 }
 
 } // namespace fmt

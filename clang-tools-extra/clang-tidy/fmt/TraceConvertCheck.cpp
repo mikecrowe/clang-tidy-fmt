@@ -51,15 +51,15 @@ void TraceConverterCheck::check(const MatchFinder::MatchResult &Result) {
 
   llvm::outs() << "Format getstring: " << FormatString << "\n";
 
-  const auto MaybeReplacementFormatString =
+  auto ReplacementFormat =
       printfFormatStringToFmtString(Result.Context, FormatString);
-  if (MaybeReplacementFormatString) {
+  if (ReplacementFormat.isChanged()) {
     DiagnosticBuilder Diag =
         diag(Format->getBeginLoc(), "Replace TRACE format string");
     Diag << FixItHint::CreateReplacement(
         CharSourceRange::getTokenRange(Format->getBeginLoc(),
                                        Format->getEndLoc()),
-        *MaybeReplacementFormatString);
+        std::move(ReplacementFormat).getString());
   }
 }
 
