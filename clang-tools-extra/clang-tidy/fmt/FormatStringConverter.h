@@ -17,10 +17,46 @@ namespace clang {
 namespace tidy {
 namespace fmt {
 
+class FormatStringResult {
+public:
+  enum Kind {
+    unsuitable,
+    unchanged,
+    changed
+  };
+private:
+  Kind ResultKind;
+  std::string ConvertedFormatString;
+
+public:
+  FormatStringResult(std::string ConvertedFormatStringResult)
+      : ResultKind(changed),
+        ConvertedFormatString(std::move(ConvertedFormatStringResult))
+  {
+  }
+
+  FormatStringResult(Kind ResultKindIn)
+      : ResultKind(ResultKindIn)
+  {
+  }
+
+  bool isSuitable() const {
+    return ResultKind != unsuitable;
+  }
+
+  bool isChanged() const {
+    return ResultKind == changed;
+  }
+
+  std::string getString() && {
+    return std::move(ConvertedFormatString);
+  }
+};
+
 /// If PrintfFormatString would change if converted from printf format to {fmt}
 /// format then return a string containing the equivalent {fmt} format.
-/// Otherwise return None.
-llvm::Optional<std::string>
+/// Otherwise return None. Throws
+FormatStringResult
 printfFormatStringToFmtString(const ASTContext *Context,
                               const StringRef PrintfFormatString);
 
