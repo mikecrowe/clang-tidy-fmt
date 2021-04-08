@@ -15,5 +15,5 @@ string strprintf_simple() {
 string strprintf_complex(const char *name, double value) {
   return strprintf("'%s'='%f'", name, value);
   // CHECK-MESSAGES: [[@LINE-1]]:10: warning: Replace strprintf with fmt::format [fmt-strprintf-convert]
-  // CHECK-FIXES: return fmt::format("'{}'='{}'", name, value);
+  // CHECK-FIXES: return fmt::format("'{}'='{:f}'", name, value);
 }

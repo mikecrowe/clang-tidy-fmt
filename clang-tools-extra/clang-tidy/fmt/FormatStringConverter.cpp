@@ -125,6 +125,66 @@ bool FormatStringConverter::HandlePrintfSpecifier(
       }
     }
 
+    {
+      using analyze_format_string::ConversionSpecifier;
+      const ConversionSpecifier spec = FS.getConversionSpecifier();
+      switch (spec.getKind()) {
+      case ConversionSpecifier::Kind::nArg:
+        // fmt doesn't do the equivalent of %n
+        ConversionPossible = false;
+        return false;
+      case ConversionSpecifier::Kind::sArg:
+        // Strings never need to be specified
+        break;
+      case ConversionSpecifier::Kind::cArg:
+      case ConversionSpecifier::Kind::dArg:
+      case ConversionSpecifier::Kind::iArg:
+        // TODO: Detect whether the d is necessary
+        break;
+      case ConversionSpecifier::Kind::pArg:
+        // Pointers don't need a specifier
+        // todo: Determine whether to call fmt::ptr around the argument
+        break;
+      case ConversionSpecifier::Kind::xArg:
+        FormatSpec.push_back('x');
+        break;
+      case ConversionSpecifier::Kind::XArg:
+        FormatSpec.push_back('X');
+        break;
+      case ConversionSpecifier::Kind::oArg:
+        FormatSpec.push_back('o');
+        break;
+      case ConversionSpecifier::Kind::aArg:
+        FormatSpec.push_back('a');
+        break;
+      case ConversionSpecifier::Kind::AArg:
+        FormatSpec.push_back('A');
+        break;
+      case ConversionSpecifier::Kind::eArg:
+        FormatSpec.push_back('e');
+        break;
+      case ConversionSpecifier::Kind::EArg:
+        FormatSpec.push_back('E');
+        break;
+      case ConversionSpecifier::Kind::fArg:
+        FormatSpec.push_back('f');
+        break;
+      case ConversionSpecifier::Kind::FArg:
+        FormatSpec.push_back('F');
+        break;
+      case ConversionSpecifier::Kind::gArg:
+        FormatSpec.push_back('g');
+        break;
+      case ConversionSpecifier::Kind::GArg:
+        FormatSpec.push_back('G');
+        break;
+      default:
+        // Something we don't understand
+        ConversionPossible = false;
+        return false;
+      }
+    }
+
     if (!FormatSpec.empty()) {
       StandardFormatString.push_back(':');
       StandardFormatString.append(FormatSpec);
