@@ -58,7 +58,9 @@ public:
 /// Otherwise return None. Throws
 FormatStringResult
 printfFormatStringToFmtString(const ASTContext *Context,
-                              const StringRef PrintfFormatString);
+                              const StringRef PrintfFormatString,
+                              const Expr * const *PrintfArgs,
+                              unsigned PrintfNumArgs);
 
 } // namespace fmt
 } // namespace tidy

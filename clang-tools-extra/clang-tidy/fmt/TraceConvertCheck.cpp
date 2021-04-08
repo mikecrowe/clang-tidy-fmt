@@ -35,10 +35,16 @@ void TraceConverterCheck::registerMatchers(MatchFinder *Finder) {
 }
 
 void TraceConverterCheck::check(const MatchFinder::MatchResult &Result) {
+  // this counts as an argument
+  const unsigned FormatArgOffset = 2;
   llvm::outs() << "Operator call\n";
-  const auto *OpCall = Result.Nodes.getNodeAs<CXXOperatorCallExpr>("trace");
-  OpCall->dumpPretty(*Result.Context);
+  const auto *Op = Result.Nodes.getNodeAs<CXXOperatorCallExpr>("trace");
+
+  Op->dumpPretty(*Result.Context);
   llvm::outs() << "\n\n";
+
+  const auto *OpArgs = Op->getArgs();
+  const auto OpNumArgs = Op->getNumArgs();
 
   llvm::outs() << "Format string\n";
   const auto *Format = Result.Nodes.getNodeAs<clang::StringLiteral>("format");
@@ -51,8 +57,9 @@ void TraceConverterCheck::check(const MatchFinder::MatchResult &Result) {
 
   llvm::outs() << "Format getstring: " << FormatString << "\n";
 
-  auto ReplacementFormat =
-      printfFormatStringToFmtString(Result.Context, FormatString);
+  auto ReplacementFormat = printfFormatStringToFmtString(
+      Result.Context, FormatString, OpArgs + FormatArgOffset,
+      OpNumArgs - FormatArgOffset);
   if (ReplacementFormat.isChanged()) {
     DiagnosticBuilder Diag =
         diag(Format->getBeginLoc(), "Replace TRACE format string");
