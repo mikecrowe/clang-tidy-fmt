@@ -30,20 +30,22 @@ void StrPrintfConvertCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *Format = Result.Nodes.getNodeAs<clang::StringLiteral>("format");
   const StringRef FormatString = Format->getString();
 
-  DiagnosticBuilder Diag =
-      diag(StrPrintfCall->getBeginLoc(), "Replace strprintf with fmt::format");
-  Diag << FixItHint::CreateReplacement(
-      CharSourceRange::getTokenRange(StrPrintfCall->getBeginLoc(),
-                                     StrPrintfCall->getEndLoc()),
-      "fmt::format");
-
-  const auto MaybeReplacementFormatString =
+  auto ReplacementFormat =
       printfFormatStringToFmtString(Result.Context, FormatString);
-  if (MaybeReplacementFormatString)
+  if (ReplacementFormat.isSuitable()) {
+    DiagnosticBuilder Diag =
+        diag(StrPrintfCall->getBeginLoc(), "Replace strprintf with fmt::format");
     Diag << FixItHint::CreateReplacement(
-        CharSourceRange::getTokenRange(Format->getBeginLoc(),
-                                       Format->getEndLoc()),
-        *MaybeReplacementFormatString);
+        CharSourceRange::getTokenRange(StrPrintfCall->getBeginLoc(),
+                                       StrPrintfCall->getEndLoc()),
+        "fmt::format");
+
+    if (ReplacementFormat.isChanged())
+      Diag << FixItHint::CreateReplacement(
+          CharSourceRange::getTokenRange(Format->getBeginLoc(),
+                                         Format->getEndLoc()),
+          std::move(ReplacementFormat).getString());
+  }
 }
 
 } // namespace fmt

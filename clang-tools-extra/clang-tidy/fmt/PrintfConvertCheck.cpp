@@ -36,20 +36,24 @@ void PrintfConvertCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *Format = Result.Nodes.getNodeAs<clang::StringLiteral>("format");
   const StringRef FormatString = Format->getString();
 
-  DiagnosticBuilder Diag =
-      diag(PrintfCall->getBeginLoc(), "Replace printf with fmt::print");
-  Diag << FixItHint::CreateReplacement(
-      CharSourceRange::getTokenRange(PrintfCall->getBeginLoc(),
-                                     PrintfCall->getEndLoc()),
-      "fmt::print");
-
-  const auto MaybeReplacementFormatString =
+  auto ReplacementFormat =
       printfFormatStringToFmtString(Result.Context, FormatString);
-  if (MaybeReplacementFormatString)
-    Diag << FixItHint::CreateReplacement(
-        CharSourceRange::getTokenRange(Format->getBeginLoc(),
-                                       Format->getEndLoc()),
-        *MaybeReplacementFormatString);
+
+  if (ReplacementFormat.isSuitable()) {
+      DiagnosticBuilder Diag =
+          diag(PrintfCall->getBeginLoc(), "Replace printf with fmt::print");
+      Diag << FixItHint::CreateReplacement(
+          CharSourceRange::getTokenRange(PrintfCall->getBeginLoc(),
+                                         PrintfCall->getEndLoc()),
+          "fmt::print");
+
+      if (ReplacementFormat.isChanged()) {
+          Diag << FixItHint::CreateReplacement(
+              CharSourceRange::getTokenRange(Format->getBeginLoc(),
+                                             Format->getEndLoc()),
+              std::move(ReplacementFormat).getString());
+      }
+  }
 }
 
 } // namespace fmt
