@@ -33,9 +33,50 @@ void printf_unsupported() {
 }
 
 void printf_integer() {
-  printf("Hello %d after\n", 42);
+  printf("Integer %d from integer\n", 42);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Hello {} after\n", 42);
+  // CHECK-FIXES: fmt::print("Integer {} from integer\n", 42);
+
+  printf("Integer %i from integer\n", 65);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Integer {} from integer\n", 65);
+
+  printf("Integer %i from char\n", 'A');
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Integer {:d} from char\n", 'A');
+
+  printf("Integer %d from char\n", 'A');
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Integer {:d} from char\n", 'A');
+}
+
+// This checks that we get the argument offset right with the extra FILE * argument
+void fprintf_integer() {
+  fprintf(stderr, "Integer %d from integer\n", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print(stderr, "Integer {} from integer\n", 42);
+
+  fprintf(stderr, "Integer %i from integer\n", 65);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print(stderr, "Integer {} from integer\n", 65);
+
+  fprintf(stderr, "Integer %i from char\n", 'A');
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print(stderr, "Integer {:d} from char\n", 'A');
+
+  fprintf(stderr, "Integer %d from char\n", 'A');
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print(stderr, "Integer {:d} from char\n", 'A');
+}
+
+void printf_char() {
+  printf("Char %c from char\n", 'A');
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Char {} from char\n", 'A');
+
+  printf("Char %c from integer\n", 65);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Char {:c} from integer\n", 65);
 }
 
 void printf_bases() {
