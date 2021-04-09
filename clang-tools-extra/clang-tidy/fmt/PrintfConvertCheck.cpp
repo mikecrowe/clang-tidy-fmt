@@ -9,6 +9,7 @@
 #include "PrintfConvertCheck.h"
 #include "FormatStringConverter.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/Lex/Lexer.h"
 
 using namespace clang::ast_matchers;
 
@@ -61,6 +62,22 @@ void PrintfConvertCheck::check(const MatchFinder::MatchResult &Result) {
                                          Format->getEndLoc()),
           std::move(ReplacementFormat).getString());
     }
+
+    ReplacementFormat.forEachPointerArg([&Diag, &Result, this](
+                                            const Expr *Arg) {
+      llvm::outs() << "Adding hint\n";
+      SourceLocation AfterOtherSide =
+          Lexer::findNextToken(Arg->getEndLoc(), *Result.SourceManager,
+                               getLangOpts())
+              ->getLocation();
+
+      Diag << FixItHint::CreateInsertion(Arg->getBeginLoc(),
+                                         "fmt::ptr(")
+           << FixItHint::CreateInsertion(
+                  AfterOtherSide, ")");
+//           << FixItHint::CreateInsertion(
+//                  Arg->getEndLoc().getLocWithOffset(1), ")");
+    });
   }
 }
 
