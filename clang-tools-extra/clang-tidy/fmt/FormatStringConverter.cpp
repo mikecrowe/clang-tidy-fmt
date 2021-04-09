@@ -29,6 +29,7 @@ class FormatStringConverter
   std::string StandardFormatString;
   bool ConversionPossible = true;
   bool NeededRewriting = false;
+  std::vector<const Expr *> PointerArgs;
 
 public:
   explicit FormatStringConverter(const StringRef PrintfFormatStringIn,
@@ -46,7 +47,11 @@ public:
                              unsigned SpecifierLen) override;
   bool isConversionPossible() const { return ConversionPossible; }
   bool neededRewriting() const { return NeededRewriting; }
-  std::string getStandardFormatString() &&;
+  std::string getStandardFormatString();
+  std::vector<const Expr *> extractPointerArgs()
+  {
+    return std::move(PointerArgs);
+  }
 };
 
 bool FormatStringConverter::HandlePrintfSpecifier(
@@ -162,8 +167,7 @@ bool FormatStringConverter::HandlePrintfSpecifier(
           FormatSpec.push_back('d');
         break;
       case ConversionSpecifier::Kind::pArg:
-        // Pointers don't need a specifier
-        // todo: Determine whether to call fmt::ptr around the argument
+        PointerArgs.push_back(Arg);
         break;
       case ConversionSpecifier::Kind::xArg:
         FormatSpec.push_back('x');
@@ -222,10 +226,11 @@ bool FormatStringConverter::HandlePrintfSpecifier(
   return true;
 }
 
-std::string FormatStringConverter::getStandardFormatString() && {
+std::string FormatStringConverter::getStandardFormatString() {
   StandardFormatString.append(PrintfFormatString.begin() +
                                   PrintfFormatStringPos,
                               PrintfFormatString.end());
+  PrintfFormatStringPos = PrintfFormatString.size();
 
   std::string result;
   result.push_back('\"');
@@ -274,10 +279,10 @@ printfFormatStringToFmtString(const ASTContext *Context,
                     Context->getTargetInfo(), IsFreeBsdkPrintf);
 
   if (!Handler.isConversionPossible())
-    return { FormatStringResult::Kind::unsuitable };
+    return FormatStringResult::Kind::unsuitable;
   if (Handler.neededRewriting())
-    return std::move(Handler).getStandardFormatString();
-  return { FormatStringResult::Kind::unchanged };
+    return { Handler.getStandardFormatString(), Handler.extractPointerArgs() };
+  return FormatStringResult::Kind::unchanged;
 }
 
 } // namespace fmt

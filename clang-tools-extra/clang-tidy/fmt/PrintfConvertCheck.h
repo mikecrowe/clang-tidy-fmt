@@ -14,7 +14,6 @@
 namespace clang {
 namespace tidy {
 namespace fmt {
-
 /// Documentation goes here.
 ///
 /// For the user-facing documentation see:

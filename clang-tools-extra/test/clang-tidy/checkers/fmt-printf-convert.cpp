@@ -114,9 +114,11 @@ void printf_double() {
 }
 
 void printf_pointer() {
-  printf("Void %p\n", NULL);
+  int i;
+  double j;
+  printf("Int* %p %s %p\n", &i, "Double*", &j);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Void {}\n", NULL);
+  // CHECK-FIXES: fmt::print("Int* {} {} {}\n", fmt::ptr(&i), "Double*", fmt::ptr(&j));
 }
 
 void printf_positional_arg() {

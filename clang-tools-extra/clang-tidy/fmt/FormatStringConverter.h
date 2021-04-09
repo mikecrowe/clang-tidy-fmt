@@ -19,48 +19,40 @@ namespace fmt {
 
 class FormatStringResult {
 public:
-  enum Kind {
-    unsuitable,
-    unchanged,
-    changed
-  };
+  enum Kind { unsuitable, unchanged, changed };
+
 private:
   Kind ResultKind;
   std::string ConvertedFormatString;
+  std::vector<const Expr *> PointerArgs;
 
 public:
-  FormatStringResult(std::string ConvertedFormatStringResult)
+  FormatStringResult(std::string ConvertedFormatStringResult,
+                     std::vector<const Expr *> PointerArgsIn)
       : ResultKind(changed),
-        ConvertedFormatString(std::move(ConvertedFormatStringResult))
-  {
-  }
+        ConvertedFormatString(std::move(ConvertedFormatStringResult)),
+        PointerArgs(std::move(PointerArgsIn)) {}
 
-  FormatStringResult(Kind ResultKindIn)
-      : ResultKind(ResultKindIn)
-  {
-  }
+  FormatStringResult(Kind ResultKindIn) : ResultKind(ResultKindIn) {}
 
-  bool isSuitable() const {
-    return ResultKind != unsuitable;
-  }
+  bool isSuitable() const { return ResultKind != unsuitable; }
 
-  bool isChanged() const {
-    return ResultKind == changed;
-  }
+  bool isChanged() const { return ResultKind == changed; }
 
-  std::string getString() && {
-    return std::move(ConvertedFormatString);
+  std::string getString() && { return std::move(ConvertedFormatString); }
+
+  template <typename Callback> void forEachPointerArg(const Callback &callback) {
+    for (const auto ArgIndex : PointerArgs)
+      callback(ArgIndex);
   }
 };
 
 /// If PrintfFormatString would change if converted from printf format to {fmt}
 /// format then return a string containing the equivalent {fmt} format.
 /// Otherwise return None. Throws
-FormatStringResult
-printfFormatStringToFmtString(const ASTContext *Context,
-                              const StringRef PrintfFormatString,
-                              const Expr * const *PrintfArgs,
-                              unsigned PrintfNumArgs);
+FormatStringResult printfFormatStringToFmtString(
+    const ASTContext *Context, const StringRef PrintfFormatString,
+    const Expr *const *PrintfArgs, unsigned PrintfNumArgs);
 
 } // namespace fmt
 } // namespace tidy
