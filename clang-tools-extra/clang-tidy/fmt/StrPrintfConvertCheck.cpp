@@ -25,31 +25,20 @@ void StrPrintfConvertCheck::registerMatchers(MatchFinder *Finder) {
 }
 
 void StrPrintfConvertCheck::check(const MatchFinder::MatchResult &Result) {
-  const unsigned FormatArgOffset = 1;
+  const unsigned FormatArgOffset = 0;
   const auto *StrPrintf = Result.Nodes.getNodeAs<CallExpr>("strprintf");
-  const auto *StrPrintfCall = StrPrintf->getCallee();
-  const auto *StrPrintfArgs = StrPrintf->getArgs();
-  const auto StrPrintfNumArgs = StrPrintf->getNumArgs();
-  const auto *Format = llvm::dyn_cast<clang::StringLiteral>(
-      StrPrintfArgs[FormatArgOffset - 1]->IgnoreImplicitAsWritten());
-  const StringRef FormatString = Format->getString();
 
-  auto ReplacementFormat = printfFormatStringToFmtString(
-      Result.Context, FormatString, StrPrintfArgs + FormatArgOffset,
-      StrPrintfNumArgs - FormatArgOffset);
-  if (ReplacementFormat.isSuitable()) {
+  FormatStringConverter Converter(Result.Context, StrPrintf, FormatArgOffset,
+                                  getLangOpts());
+  if (Converter.canApply()) {
+    const auto *StrPrintfCall = StrPrintf->getCallee();
     DiagnosticBuilder Diag = diag(StrPrintfCall->getBeginLoc(),
                                   "Replace strprintf with fmt::format");
     Diag << FixItHint::CreateReplacement(
         CharSourceRange::getTokenRange(StrPrintfCall->getBeginLoc(),
                                        StrPrintfCall->getEndLoc()),
         "fmt::format");
-
-    if (ReplacementFormat.isChanged())
-      Diag << FixItHint::CreateReplacement(
-          CharSourceRange::getTokenRange(Format->getBeginLoc(),
-                                         Format->getEndLoc()),
-          std::move(ReplacementFormat).getString());
+    Converter.applyFixes(Diag, *Result.SourceManager);
   }
 }
 

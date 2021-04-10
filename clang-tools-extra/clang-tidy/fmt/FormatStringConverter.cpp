@@ -8,50 +8,37 @@
 
 #include "FormatStringConverter.h"
 #include "clang/AST/Expr.h"
-#include "clang/AST/FormatString.h"
 #include "clang/Basic/LangOptions.h"
+#include "clang/Lex/Lexer.h"
 #include "llvm/ADT/StringExtras.h"
 
 namespace clang {
 namespace tidy {
 namespace fmt {
 
-/// Convert a printf-style format string to a libfmt-style one. This class is
-/// expecting to work on the already-cooked format string (i.e. all the escapes
-/// have been converted) so we have to convert them back. This means that we
-/// might not convert them back using the same form.
-class FormatStringConverter
-    : public clang::analyze_format_string::FormatStringHandler {
-  size_t PrintfFormatStringPos = 0U;
-  const StringRef PrintfFormatString;
-  const Expr *const *PrintfArgs;
-  const unsigned PrintfNumArgs;
-  std::string StandardFormatString;
-  bool ConversionPossible = true;
-  bool NeededRewriting = false;
-  std::vector<const Expr *> PointerArgs;
+FormatStringConverter::FormatStringConverter(const ASTContext *ContextIn,
+                                             const CallExpr *Call,
+                                             unsigned FormatArgOffset,
+                                             const LangOptions &LO)
+    : Context(ContextIn), Args(Call->getArgs()), NumArgs(Call->getNumArgs()),
+      ArgsOffset(FormatArgOffset + 1), LangOpts(LO) {
+  assert(ArgsOffset <= NumArgs);
+  FormatExpr = llvm::dyn_cast<StringLiteral>(
+      Args[FormatArgOffset]->IgnoreImplicitAsWritten());
+  assert(FormatExpr);
+  PrintfFormatString = FormatExpr->getString();
 
-public:
-  explicit FormatStringConverter(const StringRef PrintfFormatStringIn,
-                                 const Expr *const *PrintfArgsIn,
-                                 unsigned PrintfNumArgsIn)
-      : PrintfFormatString(PrintfFormatStringIn), PrintfArgs(PrintfArgsIn),
-        PrintfNumArgs(PrintfNumArgsIn) {
-    // Assume that the output will be approximately the same size as the input,
-    // but perhaps with a few escapes expanded.
-    StandardFormatString.reserve(PrintfFormatString.size() + 8);
-  }
+  // Assume that the output will be approximately the same size as the input,
+  // but perhaps with a few escapes expanded.
+  StandardFormatString.reserve(PrintfFormatString.size() + 8);
 
-  bool HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier &FS,
-                             const char *StartSpecifier,
-                             unsigned SpecifierLen) override;
-  bool isConversionPossible() const { return ConversionPossible; }
-  bool neededRewriting() const { return NeededRewriting; }
-  std::string getStandardFormatString();
-  std::vector<const Expr *> extractPointerArgs() {
-    return std::move(PointerArgs);
-  }
-};
+  const bool IsFreeBsdkPrintf = false;
+
+  using clang::analyze_format_string::ParsePrintfString;
+  ParsePrintfString(*this, PrintfFormatString.data(),
+                    PrintfFormatString.data() + PrintfFormatString.size(),
+                    LangOpts, Context->getTargetInfo(), IsFreeBsdkPrintf);
+}
 
 bool FormatStringConverter::HandlePrintfSpecifier(
     const analyze_printf::PrintfSpecifier &FS, const char *StartSpecifier,
@@ -69,15 +56,15 @@ bool FormatStringConverter::HandlePrintfSpecifier(
                               PrintfFormatString.begin() + StartSpecifierPos);
 
   using analyze_format_string::ConversionSpecifier;
-  const ConversionSpecifier spec = FS.getConversionSpecifier();
+  const ConversionSpecifier Spec = FS.getConversionSpecifier();
 
-  if (spec.getKind() == ConversionSpecifier::PercentArg)
+  if (Spec.getKind() == ConversionSpecifier::PercentArg)
     StandardFormatString.push_back('%');
-  else if (spec.getKind() == ConversionSpecifier::Kind::nArg) {
+  else if (Spec.getKind() == ConversionSpecifier::Kind::nArg) {
     // fmt doesn't do the equivalent of %n
     ConversionPossible = false;
     return false;
-  } else if (spec.getKind() == ConversionSpecifier::Kind::PrintErrno) {
+  } else if (Spec.getKind() == ConversionSpecifier::Kind::PrintErrno) {
     // fmt doesn't support %m. In theory we could insert a strerror(errno)
     // parameter (assuming that libc has a thread-safe implementation, which
     // glibc does), but that would require keeping track of the input and output
@@ -151,7 +138,7 @@ bool FormatStringConverter::HandlePrintfSpecifier(
     }
 
     {
-      if (FS.getArgIndex() > PrintfNumArgs) {
+      if (FS.getArgIndex() + ArgsOffset >= NumArgs) {
         // Argument index out of range. Give up.
         ConversionPossible = false;
         return false;
@@ -161,10 +148,11 @@ bool FormatStringConverter::HandlePrintfSpecifier(
       // argument
       assert(FS.consumesDataArgument());
 
-      const Expr *Arg = PrintfArgs[FS.getArgIndex()]->IgnoreImplicitAsWritten();
+      const Expr *Arg =
+          Args[FS.getArgIndex() + ArgsOffset]->IgnoreImplicitAsWritten();
       using analyze_format_string::ConversionSpecifier;
-      const ConversionSpecifier spec = FS.getConversionSpecifier();
-      switch (spec.getKind()) {
+      const ConversionSpecifier Spec = FS.getConversionSpecifier();
+      switch (Spec.getKind()) {
       case ConversionSpecifier::Kind::sArg:
         // Strings never need to be specified
         break;
@@ -172,7 +160,6 @@ bool FormatStringConverter::HandlePrintfSpecifier(
         // Only specify char if the argument is of a different type
         if (!Arg->getType()->isCharType())
           FormatSpec.push_back('c');
-        llvm::outs() << "c arg " << FS.getArgIndex() << "\n";
         break;
       case ConversionSpecifier::Kind::dArg:
       case ConversionSpecifier::Kind::iArg:
@@ -236,7 +223,7 @@ bool FormatStringConverter::HandlePrintfSpecifier(
   PrintfFormatStringPos = StartSpecifierPos + SpecifierLen;
   assert(PrintfFormatStringPos <= PrintfFormatString.size());
 
-  NeededRewriting = true;
+  FormatStringNeededRewriting = true;
   return true;
 }
 
@@ -278,25 +265,21 @@ std::string FormatStringConverter::getStandardFormatString() {
   return Result;
 }
 
-FormatStringResult printfFormatStringToFmtString(
-    const ASTContext *Context, const llvm::StringRef PrintfFormatString,
-    const Expr *const *PrintfArgs, unsigned PrintfNumArgs) {
-  FormatStringConverter Handler{PrintfFormatString, PrintfArgs, PrintfNumArgs};
-  LangOptions LO;
-  const bool IsFreeBsdkPrintf = false;
-
-  using clang::analyze_format_string::ParsePrintfString;
-  ParsePrintfString(Handler, PrintfFormatString.data(),
-                    PrintfFormatString.data() + PrintfFormatString.size(), LO,
-                    Context->getTargetInfo(), IsFreeBsdkPrintf);
-
-  if (!Handler.isConversionPossible())
-    return FormatStringResult::Kind::unsuitable;
-  if (Handler.neededRewriting())
-    return {Handler.getStandardFormatString(), Handler.extractPointerArgs()};
-  return FormatStringResult::Kind::unchanged;
+void FormatStringConverter::applyFixes(DiagnosticBuilder &Diag,
+                                       SourceManager &SM) {
+  if (FormatStringNeededRewriting) {
+    Diag << FixItHint::CreateReplacement(
+        CharSourceRange::getTokenRange(FormatExpr->getBeginLoc(),
+                                       FormatExpr->getEndLoc()),
+        getStandardFormatString());
+  }
+  for (const Expr *Arg : PointerArgs) {
+    SourceLocation AfterOtherSide =
+        Lexer::findNextToken(Arg->getEndLoc(), SM, LangOpts)->getLocation();
+    Diag << FixItHint::CreateInsertion(Arg->getBeginLoc(), "fmt::ptr(")
+         << FixItHint::CreateInsertion(AfterOtherSide, ")");
+  }
 }
-
 } // namespace fmt
 } // namespace tidy
 } // namespace clang

@@ -35,39 +35,15 @@ void TraceConverterCheck::registerMatchers(MatchFinder *Finder) {
 }
 
 void TraceConverterCheck::check(const MatchFinder::MatchResult &Result) {
-  // this counts as an argument
-  const unsigned FormatArgOffset = 2;
-  llvm::outs() << "Operator call\n";
+  const unsigned FormatArgOffset = 1;
   const auto *Op = Result.Nodes.getNodeAs<CXXOperatorCallExpr>("trace");
 
-  Op->dumpPretty(*Result.Context);
-  llvm::outs() << "\n\n";
-
-  const auto *OpArgs = Op->getArgs();
-  const auto OpNumArgs = Op->getNumArgs();
-
-  llvm::outs() << "Format string\n";
-  const auto *Format = llvm::dyn_cast<clang::StringLiteral>(
-      OpArgs[FormatArgOffset - 1]->IgnoreImplicitAsWritten());
-  Format->dumpPretty(*Result.Context);
-  llvm::outs() << "\n\n";
-
-  using clang::analyze_format_string::ParsePrintfString;
-
-  const StringRef FormatString = Format->getString();
-
-  llvm::outs() << "Format getstring: " << FormatString << "\n";
-
-  auto ReplacementFormat = printfFormatStringToFmtString(
-      Result.Context, FormatString, OpArgs + FormatArgOffset,
-      OpNumArgs - FormatArgOffset);
-  if (ReplacementFormat.isChanged()) {
+  FormatStringConverter Converter(Result.Context, Op, FormatArgOffset,
+                                  getLangOpts());
+  if (Converter.canApply()) {
     DiagnosticBuilder Diag =
-        diag(Format->getBeginLoc(), "Replace TRACE format string");
-    Diag << FixItHint::CreateReplacement(
-        CharSourceRange::getTokenRange(Format->getBeginLoc(),
-                                       Format->getEndLoc()),
-        std::move(ReplacementFormat).getString());
+        diag(Op->getBeginLoc(), "Replace TRACE with fmt equivalent");
+    Converter.applyFixes(Diag, *Result.SourceManager);
   }
 }
 

@@ -10,6 +10,7 @@
 #define LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_FMT_FORMATSTRINGCONVERTER_H
 
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/FormatString.h"
 #include "llvm/ADT/Optional.h"
 #include <string>
 
@@ -17,43 +18,40 @@ namespace clang {
 namespace tidy {
 namespace fmt {
 
-class FormatStringResult {
-public:
-  enum Kind { unsuitable, unchanged, changed };
+/// Convert a printf-style format string to a libfmt-style one. This class is
+/// expecting to work on the already-cooked format string (i.e. all the escapes
+/// have been converted) so we have to convert them back. This means that we
+/// might not convert them back using the same form.
+class FormatStringConverter
+    : public clang::analyze_format_string::FormatStringHandler {
+  const ASTContext *Context;
+  bool ConversionPossible = true;
+  bool FormatStringNeededRewriting = false;
+  size_t PrintfFormatStringPos = 0U;
+  StringRef PrintfFormatString;
 
-private:
-  Kind ResultKind;
-  std::string ConvertedFormatString;
+  const Expr *const *Args;
+  const unsigned NumArgs;
+  unsigned ArgsOffset;
+
+  const StringLiteral *FormatExpr;
+  std::string StandardFormatString;
   std::vector<const Expr *> PointerArgs;
+  const LangOptions &LangOpts;
+
+  bool HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier &FS,
+                             const char *StartSpecifier,
+                             unsigned SpecifierLen) override;
+
+  std::string getStandardFormatString();
 
 public:
-  FormatStringResult(std::string ConvertedFormatStringResult,
-                     std::vector<const Expr *> PointerArgsIn)
-      : ResultKind(changed),
-        ConvertedFormatString(std::move(ConvertedFormatStringResult)),
-        PointerArgs(std::move(PointerArgsIn)) {}
+  FormatStringConverter(const ASTContext *Context, const CallExpr *Call,
+                        unsigned FormatArgOffset, const LangOptions &LO);
 
-  FormatStringResult(Kind ResultKindIn) : ResultKind(ResultKindIn) {}
-
-  bool isSuitable() const { return ResultKind != unsuitable; }
-
-  bool isChanged() const { return ResultKind == changed; }
-
-  std::string getString() && { return std::move(ConvertedFormatString); }
-
-  template <typename Callback>
-  void forEachPointerArg(const Callback &callback) {
-    for (const auto ArgIndex : PointerArgs)
-      callback(ArgIndex);
-  }
+  bool canApply() const { return ConversionPossible; }
+  void applyFixes(DiagnosticBuilder &Diag, SourceManager &SM);
 };
-
-/// If PrintfFormatString would change if converted from printf format to {fmt}
-/// format then return a string containing the equivalent {fmt} format.
-/// Otherwise return None. Throws
-FormatStringResult printfFormatStringToFmtString(
-    const ASTContext *Context, const StringRef PrintfFormatString,
-    const Expr *const *PrintfArgs, unsigned PrintfNumArgs);
 
 } // namespace fmt
 } // namespace tidy
