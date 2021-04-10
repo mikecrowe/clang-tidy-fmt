@@ -39,6 +39,11 @@ void printf_unsupported() {
   // parameter indices for position arguments too.
 }
 
+void printf_not_string_literal(const char *fmt) {
+  // We can't convert the format string if it's not a literal
+  printf(fmt, 42);
+}
+
 void printf_inttypes_ugliness() {
   // The one advantage of the checker seeing the token pasted version of the
   // format string is that we automatically cope with the horrendously-ugly
