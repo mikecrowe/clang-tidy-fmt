@@ -20,14 +20,14 @@ namespace fmt {
 void PrintfConvertCheck::registerMatchers(MatchFinder *Finder) {
   StatementMatcher PrintfMatcher =
       traverse(TK_AsIs, callExpr(callee(functionDecl(hasName("printf"))),
-                                 hasArgument(0, stringLiteral().bind("format")))
-                            .bind("printf"));
+                                 hasArgument(0, stringLiteral()))
+               .bind("printf"));
   Finder->addMatcher(PrintfMatcher, this);
 
   StatementMatcher FprintfMatcher =
       traverse(TK_AsIs, callExpr(callee(functionDecl(hasName("fprintf"))),
-                                 hasArgument(1, stringLiteral().bind("format")))
-                            .bind("fprintf"));
+                                 hasArgument(1, stringLiteral()))
+               .bind("fprintf"));
   Finder->addMatcher(FprintfMatcher, this);
 }
 
@@ -41,7 +41,7 @@ void PrintfConvertCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *PrintfCall = Printf->getCallee();
   const auto *PrintfArgs = Printf->getArgs();
   const auto PrintfNumArgs = Printf->getNumArgs();
-  const auto *Format = Result.Nodes.getNodeAs<clang::StringLiteral>("format");
+  const auto *Format = llvm::dyn_cast<clang::StringLiteral>(PrintfArgs[FormatArgOffset - 1]->IgnoreImplicitAsWritten());
   const StringRef FormatString = Format->getString();
 
   auto ReplacementFormat = printfFormatStringToFmtString(
