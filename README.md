@@ -35,6 +35,10 @@ It doesn't do a bad job, but it's not perfect. In particular:
 * It has too few tests in
   clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp.
 
+* It copes with calls to printf, ::printf and std::printf. Unfortunately
+  this means that it also changes mine::printf which is probably incorrect.
+  My attempts to fix this using isInStdNamespace() have failed.
+
 * This is my first attempt at a clang-tidy checker, so it's probably full
   of things that aren't done the idiomatic LLVM way.
 
