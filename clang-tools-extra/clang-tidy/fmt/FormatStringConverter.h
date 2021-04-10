@@ -41,7 +41,8 @@ public:
 
   std::string getString() && { return std::move(ConvertedFormatString); }
 
-  template <typename Callback> void forEachPointerArg(const Callback &callback) {
+  template <typename Callback>
+  void forEachPointerArg(const Callback &callback) {
     for (const auto ArgIndex : PointerArgs)
       callback(ArgIndex);
   }

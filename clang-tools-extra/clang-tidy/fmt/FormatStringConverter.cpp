@@ -24,7 +24,7 @@ class FormatStringConverter
     : public clang::analyze_format_string::FormatStringHandler {
   size_t PrintfFormatStringPos = 0U;
   const StringRef PrintfFormatString;
-  const Expr * const *PrintfArgs;
+  const Expr *const *PrintfArgs;
   const unsigned PrintfNumArgs;
   std::string StandardFormatString;
   bool ConversionPossible = true;
@@ -48,8 +48,7 @@ public:
   bool isConversionPossible() const { return ConversionPossible; }
   bool neededRewriting() const { return NeededRewriting; }
   std::string getStandardFormatString();
-  std::vector<const Expr *> extractPointerArgs()
-  {
+  std::vector<const Expr *> extractPointerArgs() {
     return std::move(PointerArgs);
   }
 };
@@ -115,7 +114,8 @@ bool FormatStringConverter::HandlePrintfSpecifier(
           // fmt argument identifiers are zero based, whereas printf ones are
           // one based.
           assert(FieldWidth.getPositionalArgIndex() > 0U);
-          FormatSpec.append(llvm::utostr(FieldWidth.getPositionalArgIndex() - 1));
+          FormatSpec.append(
+              llvm::utostr(FieldWidth.getPositionalArgIndex() - 1));
         }
         FormatSpec.push_back('}');
         break;
@@ -140,7 +140,8 @@ bool FormatStringConverter::HandlePrintfSpecifier(
           // fmt argument identifiers are zero based, whereas printf ones are
           // one based.
           assert(FieldPrecision.getPositionalArgIndex() > 0U);
-          FormatSpec.append(llvm::utostr(FieldPrecision.getPositionalArgIndex() - 1));
+          FormatSpec.append(
+              llvm::utostr(FieldPrecision.getPositionalArgIndex() - 1));
         }
         FormatSpec.push_back('}');
         break;
@@ -156,7 +157,8 @@ bool FormatStringConverter::HandlePrintfSpecifier(
         return false;
       }
 
-      // If we've got this far, then the specifier must have an associated argument
+      // If we've got this far, then the specifier must have an associated
+      // argument
       assert(FS.consumesDataArgument());
 
       const Expr *Arg = PrintfArgs[FS.getArgIndex()]->IgnoreImplicitAsWritten();
@@ -276,11 +278,9 @@ std::string FormatStringConverter::getStandardFormatString() {
   return result;
 }
 
-FormatStringResult
-printfFormatStringToFmtString(const ASTContext *Context,
-                              const llvm::StringRef PrintfFormatString,
-                              const Expr * const *PrintfArgs,
-                              unsigned PrintfNumArgs) {
+FormatStringResult printfFormatStringToFmtString(
+    const ASTContext *Context, const llvm::StringRef PrintfFormatString,
+    const Expr *const *PrintfArgs, unsigned PrintfNumArgs) {
   FormatStringConverter Handler{PrintfFormatString, PrintfArgs, PrintfNumArgs};
   LangOptions LO;
   const bool IsFreeBsdkPrintf = false;
@@ -293,7 +293,7 @@ printfFormatStringToFmtString(const ASTContext *Context,
   if (!Handler.isConversionPossible())
     return FormatStringResult::Kind::unsuitable;
   if (Handler.neededRewriting())
-    return { Handler.getStandardFormatString(), Handler.extractPointerArgs() };
+    return {Handler.getStandardFormatString(), Handler.extractPointerArgs()};
   return FormatStringResult::Kind::unchanged;
 }
 
