@@ -55,6 +55,19 @@ void printf_inttypes_ugliness() {
   // CHECK-FIXES: fmt::print("uint64:{} uintmax:{}\n", u64, umax);
 }
 
+void printf_raw_string() {
+  // This one doesn't require the format string to be changed, so it stays intact
+  printf(R"(First\Second)");
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print(R"(First\Second)");
+
+  // This one does require the format string to be changed, so unfortunately it
+  // gets reformatted as a normal string.
+  printf(R"(First %d\Second)", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("First {}\\Second", 42);
+}
+
 void printf_integer() {
   printf("Integer %d from integer\n", 42);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
