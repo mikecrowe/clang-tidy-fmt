@@ -69,10 +69,23 @@ bool FormatStringConverter::HandlePrintfSpecifier(
                                   PrintfFormatStringPos,
                               PrintfFormatString.begin() + StartSpecifierPos);
 
-  if (FS.getConversionSpecifier().getKind() ==
-      analyze_format_string::ConversionSpecifier::PercentArg)
+  using analyze_format_string::ConversionSpecifier;
+  const ConversionSpecifier spec = FS.getConversionSpecifier();
+
+  if (spec.getKind() == ConversionSpecifier::PercentArg)
     StandardFormatString.push_back('%');
-  else {
+  else if (spec.getKind() == ConversionSpecifier::Kind::nArg) {
+    // fmt doesn't do the equivalent of %n
+    ConversionPossible = false;
+    return false;
+  } else if (spec.getKind() == ConversionSpecifier::Kind::PrintErrno) {
+    // fmt doesn't support %m. In theory we could insert a strerror(errno)
+    // parameter (assuming that libc has a thread-safe implementation, which
+    // glibc does), but that would require keeping track of the input and output
+    // parameter indices for position arguments too.
+    ConversionPossible = false;
+    return false;
+  } else {
     StandardFormatString.push_back('{');
 
     if (FS.usesPositionalArg()) {
@@ -143,14 +156,13 @@ bool FormatStringConverter::HandlePrintfSpecifier(
         return false;
       }
 
+      // If we've got this far, then the specifier must have an associated argument
+      assert(FS.consumesDataArgument());
+
       const Expr *Arg = PrintfArgs[FS.getArgIndex()]->IgnoreImplicitAsWritten();
       using analyze_format_string::ConversionSpecifier;
       const ConversionSpecifier spec = FS.getConversionSpecifier();
       switch (spec.getKind()) {
-      case ConversionSpecifier::Kind::nArg:
-        // fmt doesn't do the equivalent of %n
-        ConversionPossible = false;
-        return false;
       case ConversionSpecifier::Kind::sArg:
         // Strings never need to be specified
         break;
