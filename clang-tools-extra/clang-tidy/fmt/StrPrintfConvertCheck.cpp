@@ -19,7 +19,7 @@ namespace fmt {
 void StrPrintfConvertCheck::registerMatchers(MatchFinder *Finder) {
   StatementMatcher StrPrintfMatcher =
       traverse(TK_AsIs, callExpr(callee(functionDecl(hasName("strprintf"))),
-                                 hasArgument(0, stringLiteral().bind("format")))
+                                 hasArgument(0, stringLiteral()))
                             .bind("strprintf"));
   Finder->addMatcher(StrPrintfMatcher, this);
 }
@@ -30,7 +30,8 @@ void StrPrintfConvertCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *StrPrintfCall = StrPrintf->getCallee();
   const auto *StrPrintfArgs = StrPrintf->getArgs();
   const auto StrPrintfNumArgs = StrPrintf->getNumArgs();
-  const auto *Format = Result.Nodes.getNodeAs<clang::StringLiteral>("format");
+  const auto *Format = llvm::dyn_cast<clang::StringLiteral>(
+      StrPrintfArgs[FormatArgOffset - 1]->IgnoreImplicitAsWritten());
   const StringRef FormatString = Format->getString();
 
   auto ReplacementFormat = printfFormatStringToFmtString(
