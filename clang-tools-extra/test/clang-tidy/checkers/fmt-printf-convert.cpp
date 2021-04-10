@@ -3,6 +3,12 @@
 #include <stdio.h>
 #include <inttypes.h>
 
+// I can't find a way to include headers that contain these declarations. :(
+namespace std {
+int printf(const char *fmt, ...);
+int fprintf(FILE *, const char *fmt, ...);
+}
+
 void printf_simple() {
   printf("Hello");
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
@@ -13,6 +19,12 @@ void fprintf_simple() {
   fprintf(stderr, "Hello");
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
   // CHECK-FIXES: fmt::print(stderr, "Hello");
+}
+
+void std_printf_simple() {
+  std::printf("std::Hello");
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("std::Hello");
 }
 
 void printf_escape() {
