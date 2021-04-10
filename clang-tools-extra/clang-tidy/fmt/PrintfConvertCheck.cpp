@@ -21,61 +21,35 @@ void PrintfConvertCheck::registerMatchers(MatchFinder *Finder) {
   StatementMatcher PrintfMatcher =
       traverse(TK_AsIs, callExpr(callee(functionDecl(hasName("printf"))),
                                  hasArgument(0, stringLiteral()))
-               .bind("printf"));
+                            .bind("printf"));
   Finder->addMatcher(PrintfMatcher, this);
 
   StatementMatcher FprintfMatcher =
       traverse(TK_AsIs, callExpr(callee(functionDecl(hasName("fprintf"))),
                                  hasArgument(1, stringLiteral()))
-               .bind("fprintf"));
+                            .bind("fprintf"));
   Finder->addMatcher(FprintfMatcher, this);
 }
 
 void PrintfConvertCheck::check(const MatchFinder::MatchResult &Result) {
-  unsigned FormatArgOffset = 1;
+  unsigned FormatArgOffset = 0;
   const auto *Printf = Result.Nodes.getNodeAs<CallExpr>("printf");
   if (!Printf) {
     Printf = Result.Nodes.getNodeAs<CallExpr>("fprintf");
-    FormatArgOffset = 2;
+    FormatArgOffset = 1;
   }
-  const auto *PrintfCall = Printf->getCallee();
-  const auto *PrintfArgs = Printf->getArgs();
-  const auto PrintfNumArgs = Printf->getNumArgs();
-  const auto *Format = llvm::dyn_cast<clang::StringLiteral>(PrintfArgs[FormatArgOffset - 1]->IgnoreImplicitAsWritten());
-  const StringRef FormatString = Format->getString();
 
-  auto ReplacementFormat = printfFormatStringToFmtString(
-      Result.Context, FormatString, PrintfArgs + FormatArgOffset,
-      PrintfNumArgs - FormatArgOffset);
-
-  if (ReplacementFormat.isSuitable()) {
+  FormatStringConverter Converter(Result.Context, Printf, FormatArgOffset,
+                                  getLangOpts());
+  if (Converter.canApply()) {
+    const auto *PrintfCall = Printf->getCallee();
     DiagnosticBuilder Diag =
         diag(PrintfCall->getBeginLoc(), "Replace printf with fmt::print");
     Diag << FixItHint::CreateReplacement(
         CharSourceRange::getTokenRange(PrintfCall->getBeginLoc(),
                                        PrintfCall->getEndLoc()),
         "fmt::print");
-
-    if (ReplacementFormat.isChanged()) {
-      Diag << FixItHint::CreateReplacement(
-          CharSourceRange::getTokenRange(Format->getBeginLoc(),
-                                         Format->getEndLoc()),
-          std::move(ReplacementFormat).getString());
-    }
-
-    ReplacementFormat.forEachPointerArg(
-        [&Diag, &Result, this](const Expr *Arg) {
-          llvm::outs() << "Adding hint\n";
-          SourceLocation AfterOtherSide =
-              Lexer::findNextToken(Arg->getEndLoc(), *Result.SourceManager,
-                                   getLangOpts())
-                  ->getLocation();
-
-          Diag << FixItHint::CreateInsertion(Arg->getBeginLoc(), "fmt::ptr(")
-               << FixItHint::CreateInsertion(AfterOtherSide, ")");
-          //           << FixItHint::CreateInsertion(
-          //                  Arg->getEndLoc().getLocWithOffset(1), ")");
-        });
+    Converter.applyFixes(Diag, *Result.SourceManager);
   }
 }
 
