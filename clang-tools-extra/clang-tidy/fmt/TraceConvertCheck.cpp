@@ -28,7 +28,7 @@ void TraceConverterCheck::registerMatchers(MatchFinder *Finder) {
       TK_AsIs, cxxOperatorCallExpr(
                    hasOverloadedOperatorName("()"),
                    hasArgument(0, anyOf(TraceClassExpr, DerivedTraceClassExpr)),
-                   hasArgument(1, stringLiteral().bind("format")))
+                   hasArgument(1, stringLiteral()))
                    .bind("trace"));
 
   Finder->addMatcher(TraceMatcher, this);
@@ -47,7 +47,8 @@ void TraceConverterCheck::check(const MatchFinder::MatchResult &Result) {
   const auto OpNumArgs = Op->getNumArgs();
 
   llvm::outs() << "Format string\n";
-  const auto *Format = Result.Nodes.getNodeAs<clang::StringLiteral>("format");
+  const auto *Format = llvm::dyn_cast<clang::StringLiteral>(
+      OpArgs[FormatArgOffset - 1]->IgnoreImplicitAsWritten());
   Format->dumpPretty(*Result.Context);
   llvm::outs() << "\n\n";
 
