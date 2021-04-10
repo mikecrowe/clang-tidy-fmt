@@ -25,13 +25,9 @@ It doesn't do a bad job, but it's not perfect. In particular:
   we parse the format string in order to cope with the <inttypes.h> PRI
   macros.
 
-* It tries to support field widths, positional arguments and alternative
-  forms. It doesn't support padding or precision, among other things, yet.
-  They can be added once I'm confident that this is the right approach.
-
-* It makes no attempt to translate printf-style format specifiers to their
-  {fmt} equivalents. For example, `%d`, `%f` and `%g` all currently end up
-  being `{}`.
+* It tries to support field widths, precision, positional arguments and
+  alternative forms. It doesn't support padding and leading + among other
+  things yet, but these can be added.
 
 * It is assumed that the `fmt/format.h` header has already been included.
   No attempt is made to include it.
@@ -39,11 +35,8 @@ It doesn't do a bad job, but it's not perfect. In particular:
 * It has too few tests in
   clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp.
 
-* I'd really like to unit test `FormatStringConverter` rather than doing
-  everything in the LIT tests. This mainly because clang-tidy takes so long
-  to link on my machine that the test cycle is far too long! In order to do
-  so I need a way to create a `TargetInfo` instance to pass to
-  `ParsePrintfString`. Any advice on how to do so gratefully received.
+* The implementation is rather a mess. I have a plan for how to refactor
+  it, but it's not yet implemented.
 
 * It's not separated into easily-understandable commits with good commit
   messages yet.
@@ -67,9 +60,10 @@ string if necessary.
 
 ## Will it work for my printf-like function too?
 
-In addition to the `fmt-printf-convert` check, there are two other checks
-that are unlikely to be useful as they are, but they may be modifiable to
-do what you want: `fmt-strprintf-convert` and `fmt-trace-convert`.
+Maybe. In addition to the `fmt-printf-convert` check, there are two other
+checks that are unlikely to be useful as they are, but they may be
+modifiable to do what you want: `fmt-strprintf-convert` and
+`fmt-trace-convert`.
 
 ### fmt-strprintf-convert
 
