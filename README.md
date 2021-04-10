@@ -35,8 +35,8 @@ It doesn't do a bad job, but it's not perfect. In particular:
 * It has too few tests in
   clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp.
 
-* The implementation is rather a mess. I have a plan for how to refactor
-  it, but it's not yet implemented.
+* This is my first attempt at a clang-tidy checker, so it's probably full
+  of things that aren't done the idiomatic LLVM way.
 
 * It's not separated into easily-understandable commits with good commit
   messages yet.
