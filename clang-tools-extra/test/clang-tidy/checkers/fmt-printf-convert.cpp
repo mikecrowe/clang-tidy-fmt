@@ -30,6 +30,12 @@ void printf_unsupported() {
   int pos;
   printf("%d %n %d\n", 42, &pos, 72);
   // fmt doesn't do the equivalent of %n, so leave the call alone.
+
+  printf("Error %m\n");
+  // fmt doesn't support %m. In theory we could insert a strerror(errno)
+  // parameter (assuming that libc has a thread-safe implementation, which glibc
+  // does), but that would require keeping track of the input and output
+  // parameter indices for position arguments too.
 }
 
 void printf_integer() {
