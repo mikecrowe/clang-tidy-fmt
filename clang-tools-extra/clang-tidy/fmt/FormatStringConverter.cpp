@@ -246,36 +246,36 @@ std::string FormatStringConverter::getStandardFormatString() {
                               PrintfFormatString.end());
   PrintfFormatStringPos = PrintfFormatString.size();
 
-  std::string result;
-  result.push_back('\"');
-  for (const char ch : StandardFormatString) {
-    if (ch == '\a')
-      result += "\\a";
-    else if (ch == '\b')
-      result += "\\b";
-    else if (ch == '\f')
-      result += "\\f";
-    else if (ch == '\n')
-      result += "\\n";
-    else if (ch == '\r')
-      result += "\\r";
-    else if (ch == '\t')
-      result += "\\t";
-    else if (ch == '\v')
-      result += "\\v";
-    else if (ch == '\"')
-      result += "\\\"";
-    else if (ch == '\\')
-      result += "\\\\";
-    else if (ch < 32) {
-      result += "\\x";
-      result += llvm::hexdigit(ch >> 4, true);
-      result += llvm::hexdigit(ch & 0xf, true);
+  std::string Result;
+  Result.push_back('\"');
+  for (const char Ch : StandardFormatString) {
+    if (Ch == '\a')
+      Result += "\\a";
+    else if (Ch == '\b')
+      Result += "\\b";
+    else if (Ch == '\f')
+      Result += "\\f";
+    else if (Ch == '\n')
+      Result += "\\n";
+    else if (Ch == '\r')
+      Result += "\\r";
+    else if (Ch == '\t')
+      Result += "\\t";
+    else if (Ch == '\v')
+      Result += "\\v";
+    else if (Ch == '\"')
+      Result += "\\\"";
+    else if (Ch == '\\')
+      Result += "\\\\";
+    else if (Ch < 32) {
+      Result += "\\x";
+      Result += llvm::hexdigit(Ch >> 4, true);
+      Result += llvm::hexdigit(Ch & 0xf, true);
     } else
-      result += ch;
+      Result += Ch;
   }
-  result.push_back('\"');
-  return result;
+  Result.push_back('\"');
+  return Result;
 }
 
 FormatStringResult printfFormatStringToFmtString(
