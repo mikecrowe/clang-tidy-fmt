@@ -1,6 +1,7 @@
 // RUN: %check_clang_tidy %s fmt-printf-convert %t
 
 #include <stdio.h>
+#include <inttypes.h>
 
 void printf_simple() {
   printf("Hello");
@@ -36,6 +37,17 @@ void printf_unsupported() {
   // parameter (assuming that libc has a thread-safe implementation, which glibc
   // does), but that would require keeping track of the input and output
   // parameter indices for position arguments too.
+}
+
+void printf_inttypes_ugliness() {
+  // The one advantage of the checker seeing the token pasted version of the
+  // format string is that we automatically cope with the horrendously-ugly
+  // inttypes.h macros!
+  uint64_t u64 = 42;
+  uintmax_t umax = 4242;
+  printf("uint64:%" PRId64 " uintmax:%" PRIdMAX "\n", u64, umax);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("uint64:{} uintmax:{}\n", u64, umax);
 }
 
 void printf_integer() {
