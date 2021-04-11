@@ -167,7 +167,55 @@ void printf_pointer() {
   printf("Int* %p %s %p\n", &i, "Double*", &j);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
   // CHECK-FIXES: fmt::print("Int* {} {} {}\n", fmt::ptr(&i), "Double*", fmt::ptr(&j));
+
+  printf("%p\n", nullptr);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("{}\n", nullptr);
+
+  const auto np = nullptr;
+  printf("%p\n", np);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("{}\n", np);
+
+  // Null isn't a pointer, so {fmt} needs some help.
+  printf("%p\n", NULL);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("{}\n", reinterpret_cast<const void *>(NULL));
+
+  printf("%p\n", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("{}\n", reinterpret_cast<const void *>(42));
+
+  // If we already have a void pointer then no cast or call to fmt::ptr is required.
+  printf("%p\n", reinterpret_cast<const void *>(44));
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("{}\n", reinterpret_cast<const void *>(44));
+
+  const void *p;
+  printf("%p\n", p);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("{}\n", p);
+
+  // But a pointer to a pointer to void does need a call to fmt::ptr
+  const void **pp;
+  printf("%p\n", pp);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("{}\n", fmt::ptr(pp));
+
+  printf("%p\n", printf_pointer);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("{}\n", reinterpret_cast<const void *>(printf_pointer));
 }
+
+class AClass
+{
+  void printf_this_pointer()
+  {
+    printf("%p\n", this);
+    // CHECK-MESSAGES: [[@LINE-1]]:5: warning: Replace printf with fmt::print [fmt-printf-convert]
+    // CHECK-FIXES: fmt::print("{}\n", fmt::ptr(this));
+  }
+};
 
 void printf_positional_arg() {
   printf("Hello %2$d %1$s\n", "Goodbye", 42);

@@ -66,10 +66,8 @@ needs to replace `printf` or `fprintf` with `fmt::print`, and tell
 
 * `printf`/`fprintf` becomes `fmt::print`
 * rewrite the format string to use the [{fmt} format language][3]
-* wrap any arguments that corresponded to `%p` specifiers in a call to
-  `fmt::ptr`. This isn't yet perfect since it can result in `fmt::ptr`
-  being called with arguments that it doesn't support. It also adds the
-  call when it's not necessary.
+* wrap any arguments that corresponded to `%p` specifiers that {fmt} won't
+  deal with in a call to `fmt::ptr`.
 
 ## Will it work for my printf-like function too?
 
