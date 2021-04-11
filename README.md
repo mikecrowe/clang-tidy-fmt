@@ -1,9 +1,9 @@
 # clang-tidy fmt checks
 
 This "fork" of [llvm-project][1] adds a proof-of-concept clang-tidy checker
-that converts occurrences of printf and fprintf to fmt::print (as provided
-by the [{fmt}][2] library) and modifies the format string appropriately. In
-other words, it turns:
+that converts occurrences of `printf` and `fprintf` to `fmt::print` (as
+provided by the [{fmt}][2] library) and modifies the format string
+appropriately. In other words, it turns:
 
 ```C++
 fprintf(stderr, "The %s is %3d\n", answer, value);
@@ -55,12 +55,18 @@ you wish, or just run from the build directory with something like:
 ## How it works
 
 There are no clang-tidy checks for fmt yet, so I've added
-`clangTidyFmtModule`. The `FormatStringConverter` class is used to
-implement `printfFormatStringToFmtString` which does the hard work of
-translating the format strings. After that, the check in
-`PrintfConvertCheck` simply needs to replace `printf` or `fprintf` with
-`fmt::print`, call `printfFormatStringToFmtString` and replace the format
-string if necessary.
+`clangTidyFmtModule`. The `FormatStringConverter` class makes use of
+Clang's own `ParsePrintfString` to walk the format string deciding what to
+do. If the format string can be converted then `PrintfConvertCheck` simply
+needs to replace `printf` or `fprintf` with `fmt::print`, and tell
+`FormatStringConverter` to apply the necessary fixes. The applied fixes are:
+
+* `printf`/`fprintf` becomes `fmt::print`
+* rewrite the format string to use the [{fmt} format language][3]
+* wrap any arguments that corresponded to `%p` specifiers in a call to
+  `fmt::ptr`. This isn't yet perfect since it can result in `fmt::ptr`
+  being called with arguments that it doesn't support. It also adds the
+  call when it's not necessary.
 
 ## Will it work for my printf-like function too?
 
@@ -124,3 +130,4 @@ convert to the standard versions instead.
 
 [1]: https://github.com/llvm/llvm-project
 [2]: https://fmt.dev/
+[3]: https://fmt.dev/latest/syntax.html
