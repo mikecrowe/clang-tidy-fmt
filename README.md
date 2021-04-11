@@ -15,6 +15,9 @@ fmt::print(stderr, "The {} is {:3}\n", answer, value);
 
 It doesn't do a bad job, but it's not perfect. In particular:
 
+* It assumes that the input is mostly sane. If you get any warnings when
+  compiling with `-Wformat` then misbehaviour is possible.
+
 * At the point that the check runs, the AST contains a single
   `StringLiteral` for the format string and any macro expansion, token
   pasting, adjacent string literal concatenation and escaping has been
@@ -25,15 +28,15 @@ It doesn't do a bad job, but it's not perfect. In particular:
   we parse the format string in order to cope with the <inttypes.h> PRI
   macros.
 
-* It tries to support field widths, precision, positional arguments and
-  alternative forms. It doesn't support padding and leading + among other
-  things yet, but these can be added.
+* It tries to support field widths, precision, positional arguments,
+  leading zeros, leading +, alignment and alternative forms.
 
 * It is assumed that the `fmt/format.h` header has already been included.
   No attempt is made to include it.
 
-* It has too few tests in
-  clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp.
+* It has some tests in
+  clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp but
+  they probably don't cover the full set of possibilities.
 
 * It copes with calls to printf, ::printf and std::printf. Unfortunately
   this means that it also changes mine::printf which is probably incorrect.

@@ -187,6 +187,40 @@ void printf_field_width() {
   printf("Hello %2$*1$d after\n", 5, 424242);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
   // CHECK-FIXES: fmt::print("Hello {1:{0}} after\n", 5, 424242);
+
+  printf("Right-justified string %20s\n", "Hello");
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Right-justified string {:>20}\n", "Hello");
+
+  printf("Right-justified string with field width argument %2$*1$s after\n", 20, "wibble");
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Right-justified string with field width argument {1:>{0}} after\n", 20, "wibble");
+}
+
+void printf_left_justified() {
+  printf("Left-justified integer %-4d\n", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Left-justified integer {:<4}\n", 42);
+
+  printf("Left-justified double %-4f\n", 227.2);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Left-justified double {:<4f}\n", 227.2);
+
+  printf("Left-justified double %-4g\n", 227.4);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Left-justified double {:<4g}\n", 227.4);
+
+  printf("Left-justified integer with field width argument %2$-*1$d after\n", 5, 424242);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Left-justified integer with field width argument {1:<{0}} after\n", 5, 424242);
+
+  printf("Left-justified string %-20s\n", "Hello");
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Left-justified string {:20}\n", "Hello");
+
+  printf("Left-justified string with field width argument %2$-*1$s after\n", 5, "wibble");
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Left-justified string with field width argument {1:{0}} after\n", 5, "wibble");
 }
 
 void printf_precision() {
@@ -213,4 +247,93 @@ void printf_alternative_form() {
   printf("Wibble %#x\n", 42);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
   // CHECK-FIXES: fmt::print("Wibble {:#x}\n", 42);
+
+  printf("Wibble %#20x\n", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Wibble {:#20x}\n", 42);
+
+  printf("Wibble %#020x\n", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Wibble {:#020x}\n", 42);
+
+  printf("Wibble %#-20x\n", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Wibble {:<#20x}\n", 42);
+}
+
+void printf_leading_plus() {
+  printf("Positive integer %+d\n", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Positive integer {:+}\n", 42);
+
+  printf("Positive double %+f\n", 42.2);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Positive double {:+f}\n", 42.2);
+
+  printf("Positive double %+g\n", 42.2);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Positive double {:+g}\n", 42.2);
+
+  // Ignore leading plus on strings to avoid potential runtime exception where
+  // printf would have just ignored it.
+  printf("Positive string %+s\n", "string");
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Positive string {}\n", "string");
+}
+
+void printf_leading_space() {
+  printf("Spaced integer % d\n", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Spaced integer {: }\n", 42);
+
+  printf("Spaced double % f\n", 42.2);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Spaced double {: f}\n", 42.2);
+
+  printf("Spaced double % g\n", 42.2);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Spaced double {: g}\n", 42.2);
+}
+
+void printf_leading_zero() {
+  printf("Leading zero integer %03d\n", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Leading zero integer {:03}\n", 42);
+
+  printf("Leading zero double %03f\n", 42.2);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Leading zero double {:03f}\n", 42.2);
+
+  printf("Leading zero double %03g\n", 42.2);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Leading zero double {:03g}\n", 42.2);
+}
+
+void printf_leading_plus_and_space() {
+  // printf prefers plus to space. {fmt} will throw if both are present.
+  printf("Spaced integer % +d\n", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Spaced integer {:+}\n", 42);
+
+  printf("Spaced double %+ f\n", 42.2);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Spaced double {:+f}\n", 42.2);
+
+  printf("Spaced double % +g\n", 42.2);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Spaced double {:+g}\n", 42.2);
+}
+
+void printf_leading_zero_and_plus() {
+  printf("Leading zero integer %+03d\n", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Leading zero integer {:+03}\n", 42);
+
+  printf("Leading zero double %0+3f\n", 42.2);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Leading zero double {:+03f}\n", 42.2);
+
+  printf("Leading zero double %0+3g\n", 42.2);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Leading zero double {:+03g}\n", 42.2);
 }
