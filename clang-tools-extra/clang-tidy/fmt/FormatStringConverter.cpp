@@ -81,11 +81,45 @@ bool FormatStringConverter::HandlePrintfSpecifier(
       StandardFormatString.append(llvm::utostr(FS.getPositionalArgIndex() - 1));
     }
 
+    // [[fill]align][sign]["#"]["0"][width]["." precision][type]
     std::string FormatSpec;
+
+    // We only care about alignment if a field width is specified
+    if (FS.getFieldWidth().getHowSpecified() != OptionalAmount::NotSpecified) {
+      const ConversionSpecifier Spec = FS.getConversionSpecifier();
+      if (Spec.getKind() == ConversionSpecifier::sArg) {
+        // Strings are left-aligned by default with {fmt}, so we only need to
+        // emit an alignment if this one needs to be right aligned.
+        if (!FS.isLeftJustified())
+          FormatSpec.push_back('>');
+      } else {
+        // Numbers are right-aligned by default with {fmt}, so we only need to
+        // emit an alignment if this one needs to be left aligned.
+        if (FS.isLeftJustified())
+          FormatSpec.push_back('<');
+      }
+    }
+
+    {
+      const ConversionSpecifier Spec = FS.getConversionSpecifier();
+      // Ignore on something that isn't numeric. For printf it's would be a
+      // compile-time warning but ignored at runtime, but for {fmt} pre-C++20 it
+      // would be a runtime exception.
+      if (Spec.isAnyIntArg() || Spec.isDoubleArg()) {
+        // + is preferred to ' '
+        if (FS.hasPlusPrefix())
+          FormatSpec.push_back('+');
+        else if (FS.hasSpacePrefix())
+          FormatSpec.push_back(' ');
+      }
+    }
 
     if (FS.hasAlternativeForm()) {
       FormatSpec.push_back('#');
     }
+
+    if (FS.hasLeadingZeros())
+      FormatSpec.push_back('0');
 
     {
       const OptionalAmount FieldWidth = FS.getFieldWidth();
