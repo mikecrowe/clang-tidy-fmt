@@ -310,8 +310,24 @@ void FormatStringConverter::applyFixes(DiagnosticBuilder &Diag,
   for (const Expr *Arg : PointerArgs) {
     SourceLocation AfterOtherSide =
         Lexer::findNextToken(Arg->getEndLoc(), SM, LangOpts)->getLocation();
-    Diag << FixItHint::CreateInsertion(Arg->getBeginLoc(), "fmt::ptr(")
-         << FixItHint::CreateInsertion(AfterOtherSide, ")");
+
+    // fmt::ptr can't take a nullptr_t, and we can just pass it directly
+    // anyway.
+    if (Arg->getType()->isNullPtrType())
+      ; // {fmt} knows how to format nullptr
+    else if (Arg->getType()->isVoidPointerType())
+      ; // {fmt} knows how to format void pointers
+    else if (Arg->getType()->isPointerType())
+      Diag << FixItHint::CreateInsertion(Arg->getBeginLoc(), "fmt::ptr(")
+           << FixItHint::CreateInsertion(AfterOtherSide, ")");
+    else {
+      // fmt::ptr only accepts pointers. We need to explicitly cast anything
+      // else. (Most of these argument types would have generated -Wformat
+      // complaints, but they would have worked, so doing this will too.)
+      Diag << FixItHint::CreateInsertion(Arg->getBeginLoc(),
+                                         "reinterpret_cast<const void *>(")
+           << FixItHint::CreateInsertion(AfterOtherSide, ")");
+    }
   }
 }
 } // namespace fmt
