@@ -34,6 +34,16 @@ It doesn't do a bad job, but it's not perfect. In particular:
 * It is assumed that the `fmt/format.h` header has already been included.
   No attempt is made to include it.
 
+* Use of any unsupported flags or specifiers will cause the entire
+  statement to be left alone. Known unsupported features are:
+
+  * The `%'` flag for thousands separators. It looks like this could be
+    translated to `{:L}`, but I'm not sure it will do exactly the same
+    thing.
+
+  * The glibc extension `%m`. This could be supported relatively easily if
+    we can assume that `strerror` is thread safe (which glibc version is.)
+
 * It has some tests in
   clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp but
   they probably don't cover the full set of possibilities.
