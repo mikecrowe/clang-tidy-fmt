@@ -23,10 +23,10 @@ It doesn't do a bad job, but it's not perfect. In particular:
   pasting, adjacent string literal concatenation and escaping has been
   handled. Although it's possible for the check to automatically put the
   escapes back, they may not be exactly as they were written (e.g. "\x0a"
-  will become "\n".) It turns out that it's probably quite important that
-  macro expansion and adjacent string literal concatenation happen before
-  we parse the format string in order to cope with the <inttypes.h> PRI
-  macros.
+  will become "\n" and "ab" "cd" will become "abcd".) It turns out that
+  it's probably quite important that macro expansion and adjacent string
+  literal concatenation happen before we parse the format string in order
+  to cope with the <inttypes.h> PRI macros.
 
 * It tries to support field widths, precision, positional arguments,
   leading zeros, leading +, alignment and alternative forms.
