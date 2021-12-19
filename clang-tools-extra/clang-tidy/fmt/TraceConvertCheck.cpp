@@ -11,6 +11,7 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/FormatString.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/Lex/Lexer.h"
 
 using namespace clang::ast_matchers;
 
@@ -38,11 +39,17 @@ void TraceConverterCheck::check(const MatchFinder::MatchResult &Result) {
   const unsigned FormatArgOffset = 1;
   const auto *Op = Result.Nodes.getNodeAs<CXXOperatorCallExpr>("trace");
 
+  const LangOptions &LangOpts = getLangOpts();
   FormatStringConverter Converter(Result.Context, Op, FormatArgOffset,
-                                  getLangOpts());
+                                  LangOpts);
   if (Converter.canApply()) {
+    SourceLocation InsertionPoint =
+        Lexer::findNextToken(Op->getBeginLoc(), *Result.SourceManager,
+                             LangOpts)->getLocation();
     DiagnosticBuilder Diag =
-        diag(Op->getBeginLoc(), "Replace TRACE with fmt equivalent");
+        diag(Op->getBeginLoc(), "Replace TRACE with TRACE.F equivalent");
+    Diag << FixItHint::CreateInsertion(InsertionPoint,
+            ".F");
     Converter.applyFixes(Diag, *Result.SourceManager);
   }
 }
