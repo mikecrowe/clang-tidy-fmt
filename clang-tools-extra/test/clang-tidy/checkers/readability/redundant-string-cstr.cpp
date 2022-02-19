@@ -230,7 +230,7 @@ void m1(std::string&&) {
 
   using m1tp = void (*)(std::string &&);
   m1tp m1p2 = m1;
-  m1p2(s.c_str());  
+  m1p2(s.c_str());
 }
 
 // Test for iterator
@@ -265,3 +265,126 @@ void bar() {
   Foo.func2((Str.c_str()));
 }
 } // namespace PR45286
+
+namespace fmt {
+    template<typename ...Args>
+    void print(const char *, Args...);
+    template<typename ...Args>
+    std::string format(const char *, Args...);
+}
+
+namespace notfmt {
+    template<typename ...Args>
+    void print(const char *, Args...);
+    template<typename ...Args>
+    std::string format(const char *, Args...);
+}
+
+void fmt_print(const std::string &s1, const std::string &s2, const std::string &s3) {
+  fmt::print("One:{}\n", s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:26: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}fmt::print("One:{}\n", s1);
+
+  // Ideally we'd fix both the second and fourth parameters here, but that doesn't work.
+  fmt::print("One:{} Two:{} Three:{}\n", s1.c_str(), s2, s3.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:42: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}fmt::print("One:{} Two:{} Three:{}\n", s1, s2, s3.c_str());
+}
+
+// There's no c_str() call here, so it shouldn't be touched
+void fmt_print_no_cstr(const std::string &s1, const std::string &s2) {
+    fmt::print("One: {}, Two: {}\n", s1, s2);
+}
+
+// This isn't fmt::print, so it shouldn't be fixed.
+void not_fmt_print(const std::string &s1) {
+    notfmt::print("One: {}\n", s1.c_str());
+}
+
+void fmt_format(const std::string &s1, const std::string &s2, const std::string &s3) {
+  auto r1 = fmt::format("One:{}\n", s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:37: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}auto r1 = fmt::format("One:{}\n", s1);
+
+  // Ideally we'd fix both the second and fourth parameters here, but that doesn't work.
+  auto r2 = fmt::format("One:{} Two:{} Three:{}\n", s1.c_str(), s2, s3.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:53: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}auto r2 = fmt::format("One:{} Two:{} Three:{}\n", s1, s2, s3.c_str());
+}
+
+// There's are c_str() calls here, so it shouldn't be touched
+void fmt_format_no_cstr(const std::string &s1, const std::string &s2) {
+    fmt::format("One: {}, Two: {}\n", s1, s2);
+}
+
+// This is not fmt::format, so it shouldn't be fixed
+std::string not_fmt_format(const std::string &s1) {
+    return notfmt::format("One: {}\n", s1.c_str());
+}
+
+class BaseTrace {
+public:
+  template <typename... Args>
+  void operator()(const char *fmt, Args &&...args) {
+  }
+
+  template <typename... Args>
+  void Trace(const char *fmt, Args &&...args) {
+  }
+
+  template <typename... Args>
+  void F(const char *fmt, Args &&...args) {
+  }
+};
+
+class DerivedTrace : public BaseTrace {};
+
+class DoubleDerivedTrace : public DerivedTrace {};
+
+class NullTrace {
+public:
+  template <typename... Args>
+  void operator()(const char *fmt, Args &&...args) {
+  }
+
+  template <typename... Args>
+  void Trace(const char *fmt, Args &&...args) {
+  }
+
+  template <typename... Args>
+  void F(const char *fmt, Args &&...args) {
+  }
+};
+
+class NullDerivedTrace : public NullTrace {};
+
+void trace1(const std::string &s1) {
+  BaseTrace TRACE;
+
+  TRACE("%s\n", s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:17: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}TRACE("%s\n", s1);
+
+  DerivedTrace TRACE2;
+  TRACE2("%d %s\n", 42, s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:25: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}TRACE2("%d %s\n", 42, s1);
+
+  DoubleDerivedTrace TRACED;
+  TRACED("%d %s\n", 42, s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:25: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}TRACED("%d %s\n", 42, s1);
+}
+
+void trace2(const std::string &s1) {
+  NullTrace TRACE3;
+
+  TRACE3("%s\n", s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:18: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}TRACE3("%s\n", s1);
+
+  NullDerivedTrace TRACE4;
+  TRACE4("%d %s\n", 42, s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:25: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}TRACE4("%d %s\n", 42, s1);
+}
