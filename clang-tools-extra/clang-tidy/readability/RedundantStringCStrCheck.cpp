@@ -178,12 +178,39 @@ void RedundantStringCStrCheck::registerMatchers(
               // directly.
               hasArgument(0, StringCStrCallExpr))),
       this);
+#if 1
+  // why does this make the existing tests start failing?
+  Finder->addMatcher(
+      traverse(
+      TK_AsIs,
+      callExpr(anyOf(callee(functionDecl(hasName("::fmt::print"))), callee(functionDecl(hasName("::fmt::format")))),
+                     hasAnyArgument(StringCStrCallExpr))),
+//                     hasArgument(1, StringCStrCallExpr))),
+      this);
+#endif
+
+  const auto TraceClassExpr =
+    expr(hasType(cxxRecordDecl(isSameOrDerivedFrom("::BaseTrace"))));
+  const auto NullTraceClassExpr =
+    expr(hasType(cxxRecordDecl(isSameOrDerivedFrom("::NullTrace"))));
+
+  Finder->addMatcher(traverse(
+                       TK_AsIs, cxxOperatorCallExpr(
+                         hasOverloadedOperatorName("()"),
+                        hasArgument(0, anyOf(TraceClassExpr, NullTraceClassExpr)),
+                         hasAnyArgument(materializeTemporaryExpr(has(StringCStrCallExpr))))),
+                     this);
 }
 
 void RedundantStringCStrCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *Call = Result.Nodes.getNodeAs<CallExpr>("call");
   const auto *Arg = Result.Nodes.getNodeAs<Expr>("arg");
   const auto *Member = Result.Nodes.getNodeAs<MemberExpr>("member");
+
+  assert(Call);
+  assert(Arg);
+  assert(Member);
+
   bool Arrow = Member->isArrow();
   // Replace the "call" node with the "arg" node, prefixed with '*'
   // if the call was using '->' rather than '.'.
