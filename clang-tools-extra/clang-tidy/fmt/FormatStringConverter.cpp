@@ -42,7 +42,7 @@ FormatStringConverter::FormatStringConverter(const ASTContext *ContextIn,
 
 bool FormatStringConverter::HandlePrintfSpecifier(
     const analyze_printf::PrintfSpecifier &FS, const char *StartSpecifier,
-    unsigned SpecifierLen) {
+    unsigned SpecifierLen, const TargetInfo &Target) {
   using namespace analyze_printf;
 
   const size_t StartSpecifierPos = StartSpecifier - PrintfFormatString.data();

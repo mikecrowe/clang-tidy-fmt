@@ -39,9 +39,10 @@ class FormatStringConverter
   std::vector<const Expr *> PointerArgs;
   const LangOptions &LangOpts;
 
-  bool HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier &FS,
-                             const char *StartSpecifier,
-                             unsigned SpecifierLen) override;
+  virtual bool HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier &FS,
+                                     const char *startSpecifier,
+                                     unsigned specifierLen,
+                                     const TargetInfo &Target) override;
 
   std::string getStandardFormatString();
 
