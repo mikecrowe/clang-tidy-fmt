@@ -102,7 +102,7 @@ bool Decl::isOutOfLine() const {
 
 TranslationUnitDecl::TranslationUnitDecl(ASTContext &ctx)
     : Decl(TranslationUnit, nullptr, SourceLocation()),
-      DeclContext(TranslationUnit), Ctx(ctx) {}
+      DeclContext(TranslationUnit), redeclarable_base(ctx), Ctx(ctx) {}
 
 //===----------------------------------------------------------------------===//
 // NamedDecl Implementation
@@ -1078,6 +1078,28 @@ bool NamedDecl::isLinkageValid() const {
   return L == getCachedLinkage();
 }
 
+ReservedIdentifierStatus
+NamedDecl::isReserved(const LangOptions &LangOpts) const {
+  const IdentifierInfo *II = getIdentifier();
+
+  // This triggers at least for CXXLiteralIdentifiers, which we already checked
+  // at lexing time.
+  if (!II)
+    return ReservedIdentifierStatus::NotReserved;
+
+  ReservedIdentifierStatus Status = II->isReserved(LangOpts);
+  if (Status == ReservedIdentifierStatus::StartsWithUnderscoreAtGlobalScope) {
+    // Check if we're at TU level or not.
+    if (isa<ParmVarDecl>(this) || isTemplateParameter())
+      return ReservedIdentifierStatus::NotReserved;
+    const DeclContext *DC = getDeclContext()->getRedeclContext();
+    if (!DC->isTranslationUnit())
+      return ReservedIdentifierStatus::NotReserved;
+  }
+
+  return Status;
+}
+
 ObjCStringFormatFamily NamedDecl::getObjCFStringFormattingFamily() const {
   StringRef name = getName();
   if (name.empty()) return SFF_None;
@@ -1347,6 +1369,7 @@ LinkageInfo LinkageComputer::computeLVForDecl(const NamedDecl *D,
     case Decl::NamespaceAlias:
     case Decl::ParmVar:
     case Decl::Using:
+    case Decl::UsingEnum:
     case Decl::UsingShadow:
     case Decl::UsingDirective:
       return LinkageInfo::none();
@@ -2511,6 +2534,14 @@ bool VarDecl::isNonEscapingByref() const {
   return hasAttr<BlocksAttr>() && !NonParmVarDeclBits.EscapingByref;
 }
 
+bool VarDecl::hasDependentAlignment() const {
+  QualType T = getType();
+  return T->isDependentType() || T->isUndeducedAutoType() ||
+         llvm::any_of(specific_attrs<AlignedAttr>(), [](const AlignedAttr *AA) {
+           return AA->isAlignmentDependent();
+         });
+}
+
 VarDecl *VarDecl::getTemplateInstantiationPattern() const {
   const VarDecl *VD = this;
 
@@ -3265,6 +3296,8 @@ unsigned FunctionDecl::getBuiltinID(bool ConsiderWrapperFunctions) const {
 
   if (const auto *ABAA = getAttr<ArmBuiltinAliasAttr>()) {
     BuiltinID = ABAA->getBuiltinName()->getBuiltinID();
+  } else if (const auto *BAA = getAttr<BuiltinAliasAttr>()) {
+    BuiltinID = BAA->getBuiltinName()->getBuiltinID();
   } else if (const auto *A = getAttr<BuiltinAttr>()) {
     BuiltinID = A->getID();
   }
@@ -3275,7 +3308,7 @@ unsigned FunctionDecl::getBuiltinID(bool ConsiderWrapperFunctions) const {
   // If the function is marked "overloadable", it has a different mangled name
   // and is not the C library function.
   if (!ConsiderWrapperFunctions && hasAttr<OverloadableAttr>() &&
-      !hasAttr<ArmBuiltinAliasAttr>())
+      (!hasAttr<ArmBuiltinAliasAttr>() && !hasAttr<BuiltinAliasAttr>()))
     return 0;
 
   ASTContext &Context = getASTContext();
@@ -4555,6 +4588,13 @@ RecordDecl::field_iterator RecordDecl::field_begin() const {
 void RecordDecl::completeDefinition() {
   assert(!isCompleteDefinition() && "Cannot redefine record!");
   TagDecl::completeDefinition();
+
+  ASTContext &Ctx = getASTContext();
+
+  // Layouts are dumped when computed, so if we are dumping for all complete
+  // types, we need to force usage to get types that wouldn't be used elsewhere.
+  if (Ctx.getLangOpts().DumpRecordLayoutsComplete)
+    (void)Ctx.getASTRecordLayout(this);
 }
 
 /// isMsStruct - Get whether or not this record uses ms_struct layout.

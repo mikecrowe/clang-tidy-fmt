@@ -129,6 +129,12 @@ public:
              isReallyTriviallyReMaterializableGeneric(MI, AA)));
   }
 
+  /// Given \p MO is a PhysReg use return if it can be ignored for the purpose
+  /// of instruction rematerialization.
+  virtual bool isIgnorableUse(const MachineOperand &MO) const {
+    return false;
+  }
+
 protected:
   /// For instructions with opcodes for which the M_REMATERIALIZABLE flag is
   /// set, this hook lets the target specify whether the instruction is actually
@@ -458,6 +464,13 @@ public:
   virtual bool findCommutedOpIndices(const MachineInstr &MI,
                                      unsigned &SrcOpIdx1,
                                      unsigned &SrcOpIdx2) const;
+
+  /// Returns true if the target has a preference on the operands order of
+  /// the given machine instruction. And specify if \p Commute is required to
+  /// get the desired operands order.
+  virtual bool hasCommutePreference(MachineInstr &MI, bool &Commute) const {
+    return false;
+  }
 
   /// A pair composed of a register and a sub-register index.
   /// Used to give some type checking when modeling Reg:SubReg.
@@ -1063,6 +1076,16 @@ public:
   /// target-independent code, moving this responsibility to the targets
   /// has the potential of causing nasty silent breakage in out-of-tree targets.
   virtual bool isSubregFoldable() const { return false; }
+
+  /// For a patchpoint, stackmap, or statepoint intrinsic, return the range of
+  /// operands which can't be folded into stack references. Operands outside
+  /// of the range are most likely foldable but it is not guaranteed.
+  /// These instructions are unique in that stack references for some operands
+  /// have the same execution cost (e.g. none) as the unfolded register forms.
+  /// The ranged return is guaranteed to include all operands which can't be
+  /// folded at zero cost.
+  virtual std::pair<unsigned, unsigned>
+  getPatchpointUnfoldableRange(const MachineInstr &MI) const;
 
   /// Attempt to fold a load or store of the specified stack
   /// slot into the specified machine instruction for the specified operand(s).
@@ -1963,6 +1986,11 @@ public:
   /// not provided.
   virtual unsigned getTailDuplicateSize(CodeGenOpt::Level OptLevel) const {
     return OptLevel >= CodeGenOpt::Aggressive ? 4 : 2;
+  }
+
+  /// Returns the callee operand from the given \p MI.
+  virtual const MachineOperand &getCalleeOperand(const MachineInstr &MI) const {
+    return MI.getOperand(0);
   }
 
 private:

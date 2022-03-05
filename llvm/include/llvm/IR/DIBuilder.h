@@ -181,7 +181,9 @@ namespace llvm {
                                      DIFile *File);
 
     /// Create a single enumerator value.
-    DIEnumerator *createEnumerator(StringRef Name, int64_t Val, bool IsUnsigned = false);
+    DIEnumerator *createEnumerator(StringRef Name, APSInt Value);
+    DIEnumerator *createEnumerator(StringRef Name, uint64_t Val,
+                                   bool IsUnsigned = false);
 
     /// Create a DWARF unspecified type.
     DIBasicType *createUnspecifiedType(StringRef Name);
@@ -542,7 +544,7 @@ namespace llvm {
     /// \param Scope          Scope in which this set is defined.
     /// \param Name           Set name.
     /// \param File           File where this set is defined.
-    /// \param LineNumber     Line number.
+    /// \param LineNo         Line number.
     /// \param SizeInBits     Set size.
     /// \param AlignInBits    Set alignment.
     /// \param Ty             Base type of the set.

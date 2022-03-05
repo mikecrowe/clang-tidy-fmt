@@ -8,7 +8,7 @@
 
 #include "lldb/Host/Config.h"
 
-#include <stdio.h>
+#include <cstdio>
 #if HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
@@ -57,7 +57,7 @@ UserExpression::UserExpression(ExecutionContextScope &exe_scope,
       m_expr_prefix(std::string(prefix)), m_language(language),
       m_desired_type(desired_type), m_options(options) {}
 
-UserExpression::~UserExpression() {}
+UserExpression::~UserExpression() = default;
 
 void UserExpression::InstallContext(ExecutionContext &exe_ctx) {
   m_jit_process_wp = exe_ctx.GetProcessSP();
@@ -302,19 +302,19 @@ UserExpression::Evaluate(ExecutionContext &exe_ctx,
     }
 
     if (!parse_success) {
-      if (!fixed_expression->empty() && target->GetEnableNotifyAboutFixIts()) {
-        error.SetExpressionErrorWithFormat(
-            execution_results,
-            "expression failed to parse, fixed expression suggested:\n  %s",
-            fixed_expression->c_str());
-      } else {
-        if (!diagnostic_manager.Diagnostics().size())
-          error.SetExpressionError(execution_results,
-                                   "expression failed to parse, unknown error");
+      std::string msg;
+      {
+        llvm::raw_string_ostream os(msg);
+        os << "expression failed to parse:\n";
+        if (!diagnostic_manager.Diagnostics().empty())
+          os << diagnostic_manager.GetString();
         else
-          error.SetExpressionError(execution_results,
-                                   diagnostic_manager.GetString().c_str());
+          os << "unknown error";
+        if (target->GetEnableNotifyAboutFixIts() && fixed_expression &&
+            !fixed_expression->empty())
+          os << "\nfixed expression suggested:\n  " << *fixed_expression;
       }
+      error.SetExpressionError(execution_results, msg.c_str());
     }
   }
 

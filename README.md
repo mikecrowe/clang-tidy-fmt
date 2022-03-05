@@ -23,16 +23,26 @@ It doesn't do a bad job, but it's not perfect. In particular:
   pasting, adjacent string literal concatenation and escaping has been
   handled. Although it's possible for the check to automatically put the
   escapes back, they may not be exactly as they were written (e.g. "\x0a"
-  will become "\n".) It turns out that it's probably quite important that
-  macro expansion and adjacent string literal concatenation happen before
-  we parse the format string in order to cope with the <inttypes.h> PRI
-  macros.
+  will become "\n" and "ab" "cd" will become "abcd".) It turns out that
+  it's probably quite important that macro expansion and adjacent string
+  literal concatenation happen before we parse the format string in order
+  to cope with the <inttypes.h> PRI macros.
 
 * It tries to support field widths, precision, positional arguments,
   leading zeros, leading +, alignment and alternative forms.
 
 * It is assumed that the `fmt/format.h` header has already been included.
   No attempt is made to include it.
+
+* Use of any unsupported flags or specifiers will cause the entire
+  statement to be left alone. Known unsupported features are:
+
+  * The `%'` flag for thousands separators. It looks like this could be
+    translated to `{:L}`, but I'm not sure it will do exactly the same
+    thing.
+
+  * The glibc extension `%m`. This could be supported relatively easily if
+    we can assume that `strerror` is thread safe (which glibc version is.)
 
 * It has some tests in
   clang-tools-extra/test/clang-tidy/checkers/fmt-printf-convert.cpp but

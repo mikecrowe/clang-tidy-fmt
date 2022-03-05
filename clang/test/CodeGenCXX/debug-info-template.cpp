@@ -179,3 +179,21 @@ ClassTemplateArgRefTemplate<ClassTemplateArgObj.Arg> ClassTemplateArgRefObj;
 // CHECK: !DICompositeType(tag: DW_TAG_structure_type, name: "ClassTemplateArgRefTemplate<<template param ClassTemplateArg{1, 2.000000e+00}> >", {{.*}}, templateParams: ![[CLASS_TEMP_REF_ARGS:[0-9]*]],
 // CHECK: ![[CLASS_TEMP_REF_ARGS]] = !{![[CLASS_TEMP_REF_ARG:[0-9]*]]}
 // CHECK: ![[CLASS_TEMP_REF_ARG]] = !DITemplateValueParameter(type: ![[CLASS_TEMP_ARG_CONST_REF_TYPE]], value: %{{.*}}* @_ZTAXtl16ClassTemplateArgLi1ELf40000000EEE)
+
+inline namespace inl {
+  struct t1 { };
+}
+template<typename T> struct ClassTemplateInlineNamespaceArg {
+};
+ClassTemplateInlineNamespaceArg<inl::t1> ClassTemplateInlineNamespaceArgObj;
+// CHECK: !DICompositeType(tag: DW_TAG_structure_type, name: "ClassTemplateInlineNamespaceArg<inl::t1>",
+
+namespace IndirectDefaultArgument {
+template<typename T1, typename T2 = int>
+struct t1 { };
+template<typename T>
+void f1() {
+}
+template void f1<t1<int>>();
+// CHECK: !DISubprogram(name: "f1<IndirectDefaultArgument::t1<int, int> >",
+}

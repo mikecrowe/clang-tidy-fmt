@@ -143,9 +143,19 @@ public:
                                        unsigned OpIdx1,
                                        unsigned OpIdx2) const override;
 
-  Register getVLENFactoredAmount(MachineFunction &MF, MachineBasicBlock &MBB,
-                                 MachineBasicBlock::iterator II,
-                                 int64_t Amount) const;
+  MachineInstr *convertToThreeAddress(MachineFunction::iterator &MBB,
+                                      MachineInstr &MI,
+                                      LiveVariables *LV) const override;
+
+  Register getVLENFactoredAmount(
+      MachineFunction &MF, MachineBasicBlock &MBB,
+      MachineBasicBlock::iterator II, const DebugLoc &DL, int64_t Amount,
+      MachineInstr::MIFlag Flag = MachineInstr::NoFlags) const;
+
+  // Returns true if the given MI is an RVV instruction opcode for which we may
+  // expect to see a FrameIndex operand. When CheckFIs is true, the instruction
+  // must contain at least one FrameIndex operand.
+  bool isRVVSpill(const MachineInstr &MI, bool CheckFIs) const;
 
   Optional<std::pair<unsigned, unsigned>>
   isRVVSpillForZvlsseg(unsigned Opcode) const;

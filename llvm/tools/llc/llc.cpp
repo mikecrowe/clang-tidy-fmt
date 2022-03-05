@@ -126,9 +126,10 @@ static cl::opt<bool> DisableSimplifyLibCalls("disable-simplify-libcalls",
 static cl::opt<bool> ShowMCEncoding("show-mc-encoding", cl::Hidden,
                                     cl::desc("Show encoding in .s output"));
 
-static cl::opt<bool> EnableDwarfDirectory(
-    "enable-dwarf-directory", cl::Hidden,
-    cl::desc("Use .file directives with an explicit directory."));
+static cl::opt<bool>
+    DwarfDirectory("dwarf-directory", cl::Hidden,
+                   cl::desc("Use .file directives with an explicit directory"),
+                   cl::init(true));
 
 static cl::opt<bool> AsmVerbose("asm-verbose",
                                 cl::desc("Add comments to directives."),
@@ -276,7 +277,7 @@ static std::unique_ptr<ToolOutputFile> GetOutputStream(const char *TargetName,
   std::error_code EC;
   sys::fs::OpenFlags OpenFlags = sys::fs::OF_None;
   if (!Binary)
-    OpenFlags |= sys::fs::OF_Text;
+    OpenFlags |= sys::fs::OF_TextWithCRLF;
   auto FDOut = std::make_unique<ToolOutputFile>(OutputFilename, EC, OpenFlags);
   if (EC) {
     reportError(EC.message());
@@ -352,6 +353,7 @@ int main(int argc, char **argv) {
   initializeVectorization(*Registry);
   initializeScalarizeMaskedMemIntrinLegacyPassPass(*Registry);
   initializeExpandReductionsPass(*Registry);
+  initializeExpandVectorPredicationPass(*Registry);
   initializeHardwareLoopsPass(*Registry);
   initializeTransformUtils(*Registry);
   initializeReplaceWithVeclibLegacyPass(*Registry);
@@ -472,7 +474,7 @@ static int compileModule(char **argv, LLVMContext &Context) {
         TargetMachine::parseBinutilsVersion(BinutilsVersion);
     Options.DisableIntegratedAS = NoIntegratedAssembler;
     Options.MCOptions.ShowMCEncoding = ShowMCEncoding;
-    Options.MCOptions.MCUseDwarfDirectory = EnableDwarfDirectory;
+    Options.MCOptions.MCUseDwarfDirectory = DwarfDirectory;
     Options.MCOptions.AsmVerbose = AsmVerbose;
     Options.MCOptions.PreserveAsmComments = PreserveComments;
     Options.MCOptions.IASSearchPaths = IncludeDirs;

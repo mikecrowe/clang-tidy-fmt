@@ -2353,14 +2353,12 @@ define zeroext i16 @bswap_i16(i16 zeroext %a) nounwind {
 ;
 ; RV32IB-LABEL: bswap_i16:
 ; RV32IB:       # %bb.0:
-; RV32IB-NEXT:    rev8 a0, a0
-; RV32IB-NEXT:    srli a0, a0, 16
+; RV32IB-NEXT:    rev8.h a0, a0
 ; RV32IB-NEXT:    ret
 ;
 ; RV32IBP-LABEL: bswap_i16:
 ; RV32IBP:       # %bb.0:
-; RV32IBP-NEXT:    rev8 a0, a0
-; RV32IBP-NEXT:    srli a0, a0, 16
+; RV32IBP-NEXT:    rev8.h a0, a0
 ; RV32IBP-NEXT:    ret
   %1 = tail call i16 @llvm.bswap.i16(i16 %a)
   ret i16 %1
@@ -2467,14 +2465,12 @@ define zeroext i8 @bitreverse_i8(i8 zeroext %a) nounwind {
 ;
 ; RV32IB-LABEL: bitreverse_i8:
 ; RV32IB:       # %bb.0:
-; RV32IB-NEXT:    rev a0, a0
-; RV32IB-NEXT:    srli a0, a0, 24
+; RV32IB-NEXT:    rev.b a0, a0
 ; RV32IB-NEXT:    ret
 ;
 ; RV32IBP-LABEL: bitreverse_i8:
 ; RV32IBP:       # %bb.0:
-; RV32IBP-NEXT:    rev a0, a0
-; RV32IBP-NEXT:    srli a0, a0, 24
+; RV32IBP-NEXT:    rev.b a0, a0
 ; RV32IBP-NEXT:    ret
   %1 = tail call i8 @llvm.bitreverse.i8(i8 %a)
   ret i8 %1
@@ -2519,14 +2515,12 @@ define zeroext i16 @bitreverse_i16(i16 zeroext %a) nounwind {
 ;
 ; RV32IB-LABEL: bitreverse_i16:
 ; RV32IB:       # %bb.0:
-; RV32IB-NEXT:    rev a0, a0
-; RV32IB-NEXT:    srli a0, a0, 16
+; RV32IB-NEXT:    rev.h a0, a0
 ; RV32IB-NEXT:    ret
 ;
 ; RV32IBP-LABEL: bitreverse_i16:
 ; RV32IBP:       # %bb.0:
-; RV32IBP-NEXT:    rev a0, a0
-; RV32IBP-NEXT:    srli a0, a0, 16
+; RV32IBP-NEXT:    rev.h a0, a0
 ; RV32IBP-NEXT:    ret
   %1 = tail call i16 @llvm.bitreverse.i16(i16 %a)
   ret i16 %1
@@ -3354,10 +3348,8 @@ define i32 @packh_i32(i32 %a, i32 %b) nounwind {
 ; RV32I-LABEL: packh_i32:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    andi a0, a0, 255
-; RV32I-NEXT:    slli a1, a1, 8
-; RV32I-NEXT:    lui a2, 16
-; RV32I-NEXT:    addi a2, a2, -256
-; RV32I-NEXT:    and a1, a1, a2
+; RV32I-NEXT:    slli a1, a1, 24
+; RV32I-NEXT:    srli a1, a1, 16
 ; RV32I-NEXT:    or a0, a1, a0
 ; RV32I-NEXT:    ret
 ;
@@ -3381,10 +3373,8 @@ define i64 @packh_i64(i64 %a, i64 %b) nounwind {
 ; RV32I-LABEL: packh_i64:
 ; RV32I:       # %bb.0:
 ; RV32I-NEXT:    andi a0, a0, 255
-; RV32I-NEXT:    slli a1, a2, 8
-; RV32I-NEXT:    lui a2, 16
-; RV32I-NEXT:    addi a2, a2, -256
-; RV32I-NEXT:    and a1, a1, a2
+; RV32I-NEXT:    slli a1, a2, 24
+; RV32I-NEXT:    srli a1, a1, 16
 ; RV32I-NEXT:    or a0, a1, a0
 ; RV32I-NEXT:    mv a1, zero
 ; RV32I-NEXT:    ret

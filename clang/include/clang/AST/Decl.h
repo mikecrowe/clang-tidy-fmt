@@ -79,7 +79,23 @@ class UnresolvedSetImpl;
 class VarTemplateDecl;
 
 /// The top declaration context.
-class TranslationUnitDecl : public Decl, public DeclContext {
+class TranslationUnitDecl : public Decl,
+                            public DeclContext,
+                            public Redeclarable<TranslationUnitDecl> {
+  using redeclarable_base = Redeclarable<TranslationUnitDecl>;
+
+  TranslationUnitDecl *getNextRedeclarationImpl() override {
+    return getNextRedeclaration();
+  }
+
+  TranslationUnitDecl *getPreviousDeclImpl() override {
+    return getPreviousDecl();
+  }
+
+  TranslationUnitDecl *getMostRecentDeclImpl() override {
+    return getMostRecentDecl();
+  }
+
   ASTContext &Ctx;
 
   /// The (most recently entered) anonymous namespace for this
@@ -91,6 +107,16 @@ class TranslationUnitDecl : public Decl, public DeclContext {
   virtual void anchor();
 
 public:
+  using redecl_range = redeclarable_base::redecl_range;
+  using redecl_iterator = redeclarable_base::redecl_iterator;
+
+  using redeclarable_base::getMostRecentDecl;
+  using redeclarable_base::getPreviousDecl;
+  using redeclarable_base::isFirstDecl;
+  using redeclarable_base::redecls;
+  using redeclarable_base::redecls_begin;
+  using redeclarable_base::redecls_end;
+
   ASTContext &getASTContext() const { return Ctx; }
 
   NamespaceDecl *getAnonymousNamespace() const { return AnonymousNamespace; }
@@ -355,6 +381,10 @@ public:
   /// Determine whether the given declaration is an instance member of
   /// a C++ class.
   bool isCXXInstanceMember() const;
+
+  /// Determine if the declaration obeys the reserved identifier rules of the
+  /// given language.
+  ReservedIdentifierStatus isReserved(const LangOptions &LangOpts) const;
 
   /// Determine what kind of linkage this entity has.
   ///
@@ -1489,6 +1519,9 @@ public:
   void setEscapingByref() {
     NonParmVarDeclBits.EscapingByref = true;
   }
+
+  /// Determines if this variable's alignment is dependent.
+  bool hasDependentAlignment() const;
 
   /// Retrieve the variable declaration from which this variable could
   /// be instantiated, if it is an instantiation (rather than a non-template).

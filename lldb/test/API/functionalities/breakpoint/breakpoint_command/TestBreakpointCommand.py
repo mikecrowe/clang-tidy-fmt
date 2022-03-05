@@ -270,9 +270,7 @@ class BreakpointCommandTestCase(TestBase):
 
     def breakpoint_commands_on_creation(self):
         """Test that setting breakpoint commands when creating the breakpoint works"""
-        exe = self.getBuildArtifact("a.out")
-        target = self.dbg.CreateTarget(exe)
-        self.assertTrue(target.IsValid(), "Created an invalid target.")
+        target = self.createTestTarget()
 
         # Add a breakpoint.
         lldbutil.run_break_set_by_file_and_line(
@@ -291,9 +289,7 @@ class BreakpointCommandTestCase(TestBase):
     def test_breakpoint_delete_disabled(self):
         """Test 'break delete --disabled' works"""
         self.build()
-        exe = self.getBuildArtifact("a.out")
-        target = self.dbg.CreateTarget(exe)
-        self.assertTrue(target.IsValid(), "Created an invalid target.")
+        target = self.createTestTarget()
 
         bp_1 = target.BreakpointCreateByName("main")
         bp_2 = target.BreakpointCreateByName("not_here")
@@ -317,3 +313,22 @@ class BreakpointCommandTestCase(TestBase):
 
         bp_3 = target.FindBreakpointByID(bp_id_3)
         self.assertTrue(bp_3.IsValid(), "DeleteMeNot didn't protect disabled breakpoint 3")
+
+        # Reset the first breakpoint, disable it, and do this again with no protected name:
+        bp_1 = target.BreakpointCreateByName("main")
+
+        bp_1.SetEnabled(False)
+
+        bp_id_1 = bp_1.GetID()
+        
+        self.runCmd("breakpoint delete --disabled")
+
+        bp_1 = target.FindBreakpointByID(bp_id_1)
+        self.assertFalse(bp_1.IsValid(), "Didn't delete disabled breakpoint 1")
+
+        bp_2 = target.FindBreakpointByID(bp_id_2)
+        self.assertTrue(bp_2.IsValid(), "Deleted enabled breakpoint 2")
+
+        bp_3 = target.FindBreakpointByID(bp_id_3)
+        self.assertFalse(bp_3.IsValid(), "Didn't delete disabled breakpoint 3")
+        

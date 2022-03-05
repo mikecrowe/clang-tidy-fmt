@@ -55,29 +55,65 @@ Non-comprehensive list of changes in this release
   emits valid unwind entrypoints which are validated when the context is being
   set during exception handling.
 
+* Flang is now included in the binary packages released by LLVM.
+
+* The debuginfo-test project has been renamed cross-project-tests and is now
+  intended for testing components from multiple projects, not just debug
+  information. The new "cross-project-tests" name replaces "debuginfo-test" in
+  LLVM_ENABLE_PROJECTS, and a new check-cross-project-tests target has been
+  added for running all tests in the project. The pre-existing check-debuginfo-
+  test target remains for running just the debug information tests.
+  (`D95339 <https://reviews.llvm.org/D95339>`_ and
+  `D96513 <https://reviews.llvm.org/D96513>`_)
+
 Changes to the LLVM IR
 ----------------------
 
 * The ``inalloca`` attribute now has a mandatory type field, similar
   to ``byval`` and ``sret``.
 
+* The opaque pointer type ``ptr`` has been introduced. It is still in the
+  process of being worked on and should not be used yet.
+
+* Using the legacy pass manager for the optimization pipeline is deprecated and
+  will be removed after LLVM 14. In the meantime, only minimal effort will be
+  made to maintain the legacy pass manager for the optimization pipeline.
 
 Changes to building LLVM
 ------------------------
 
+* The build system now supports building multiple distributions, so that you can
+  e.g. have one distribution containing just tools and another for libraries (to
+  enable development). See :ref:`Multi-distribution configurations` for details.
+
 Changes to TableGen
 -------------------
+
+Changes to the AArch64 Backend
+------------------------------
+
+* Introduced assembly support for Armv9-A's Realm Management Extension (RME)
+  and Scalable Matrix Extension (SME).
+
+* Produce proper cross-section relative relocations on COFF
+
+* Fixed the calling convention on Windows for variadic functions involving
+  floats in the fixed arguments
 
 Changes to the ARM Backend
 --------------------------
 
-During this release ...
+* Produce proper cross-section relative relocations on COFF
 
 Changes to the MIPS Target
 --------------------------
 
 During this release ...
 
+Changes to the Hexagon Target
+-----------------------------
+
+* The Hexagon target now supports V68/HVX ISA.
 
 Changes to the PowerPC Target
 -----------------------------
@@ -111,6 +147,71 @@ Changes to the OCaml bindings
 Changes to the C API
 --------------------
 
+* The C API functions ``LLVMGetAlignment`` and ``LLVMSetAlignment`` now allow
+  changing alignment on atomicrmw and cmpxchg instructions
+
+* A new entry ``LLVMDIArgListMetadataKind`` was added to the
+  ``LLVMMetadataKind`` enum, representing DIArgLists
+  (`D88175 <https://reviews.llvm.org/D88175>`_)
+
+* Type attributes have been added to LLVM-C, introducing
+  LLVMCreateTypeAttribute, LLVMGetTypeAttributeValue and LLVMIsTypeAttribute.
+  (`D977763' <https://reviews.llvm.org/D97763>`_)
+
+* The ``LTO_API_VERSION`` was bumped to 28, introducing a new function
+  ``lto_set_debug_options`` for parsing LTO debug options
+  (`D92611 <https://reviews.llvm.org/D92611>`_)
+
+* ``LLVMJITTargetSymbolFlags`` was renamed to ``LLVMJITSymbolTargetFlags``
+  (`rG8d718a0bff73af066675a6258c01307937c33cf9
+  <https://reviews.llvm.org/rG8d718a0bff73af066675a6258c01307937c33cf9>`_)
+
+* The C API received support for creating custom ORCv2 MaterializationUnits and
+  APIs to retrieve an LLJIT instance's linking layers. An ABI breaking change
+  for ``LLVMOrcAbsoluteSymbols`` was introduced to make it consistent with
+  ``LLVMOrcCreateCustomMaterializationUnit``.
+  (`rGc8fc5e3ba942057d6c4cdcd1faeae69a28e7b671
+  <https://reviews.llvm.org/rGc8fc5e3ba942057d6c4cdcd1faeae69a28e7b671>`_)
+
+* The C API received support for adding ORCv2 object buffers directly to an object
+  layer. (`rG7b73cd684a8d5fb44d34064200f10e2723085c33
+  <https://reviews.llvm.org/rG7b73cd684a8d5fb44d34064200f10e2723085c33>`_)
+
+* A breaking change to ``LLVMGetInlineAsm`` was introduced, adding a ninth
+  argument ``LLVMBool CanThrow`` (`D95745 <https://reviews.llvm.org/D95745>`_)
+
+* The C API received support for calling into the new pass manager.
+  (`D102136 <https://reviews.llvm.org/D102136>`_)
+
+* The C API function ``LLVMIntrinsicCopyOverloadedName`` has been deprecated.
+  Please migrate to ``LLVMIntrinsicCopyOverloadedName2`` which takes an extra
+  module argument and which also handles unnamed types.
+  (`D99173 <https://reviews.llvm.org/D99173>`_)
+
+* The C API received support for dumping objects from ORCv2
+  (`rGcec8e69f01c3374cb38c6683058381b96fab8f89
+  <https://reviews.llvm.org/rGcec8e69f01c3374cb38c6683058381b96fab8f89>`_)
+
+* A breaking change to ``LLVMOrcObjectTransformLayerTransformFunction`` was
+  introduced, changing the order of the function pointer's arguments.
+  (`rG8962c68ad007a525f9daa987c99eda57e0d0069a
+  <https://reviews.llvm.org/rG8962c68ad007a525f9daa987c99eda57e0d0069a>`_)
+
+* The C API received support for accessing utilities from the LLJIT
+  ``IRTransformLayer`` and ``ThreadSafeModule`` classes. (`D103855
+  <https://reviews.llvm.org/D103855>`_)
+
+* The C API received support for creating lazy-export MaterializationUnits
+  (`D104672 <https://reviews.llvm.org/D104672>`_)
+
+* The C API function ``LLVMPassBuilderOptionsSetCoroutines`` was removed because
+  couroutine passes have been enabled by default. (`D105877
+  <https://reviews.llvm.org/D105877>`_)
+
+* ``comdat noduplicates`` was renamed to ``comdat nodeduplicate`` and as a
+  result, ``LLVMNoDuplicatesComdatSelectionKind`` was renamed to
+  ``LLVMNoDeduplicateComdatSelectionKind``. (`D106319
+  <https://reviews.llvm.org/D106319>`_)
 
 Changes to the Go bindings
 --------------------------
@@ -141,8 +242,48 @@ Changes to the LLVM tools
 * Support for in-order processors has been added to ``llvm-mca``.
   (`D94928 <https://reviews.llvm.org/D94928>`_)
 
+* llvm-objdump supports ``-M {att,intel}`` now.
+  ``--x86-asm-syntax`` is a deprecated internal option which will be removed in LLVM 14.0.0.
+  (`D101695 <https://reviews.llvm.org/D101695>`_)
+
+* The llvm-readobj short aliases ``-s`` (previously ``--sections``) and ``-t``
+  (previously ``--syms``) have been changed to ``--syms`` and
+  ``--section-details`` respectively, to match llvm-readelf.
+  (`D105055 <https://reviews.llvm.org/D105055>`_)
+
+* The llvm-nm short aliases ``-M`` (``--print-armap``), ``-U``
+  (``--defined-only``), and ``-W`` (``--no-weak``) are now deprecated.
+  Use the long form versions instead.
+  The alias ``--just-symbol-name`` is now deprecated in favor of
+  ``--format=just-symbols`` and ``-j``.
+  (`D105330 <https://reviews.llvm.org/D105330>`_)
+
+* In lli the default JIT engine switched from MCJIT (``-jit-kind=mcjit``) to ORC (``-jit-kind=orc``).
+  (`D98931 <https://reviews.llvm.org/D98931>`_)
+
+* llvm-rc got support for invoking Clang to preprocess its input.
+  (`D100755 <https://reviews.llvm.org/D100755>`_)
+
+* llvm-rc got a GNU windres compatible frontend, llvm-windres.
+  (`D100756 <https://reviews.llvm.org/D100756>`_)
+
+* llvm-ml has improved compatibility with MS ml.exe, managing to assemble
+  more asm files.
+
 Changes to LLDB
 ---------------------------------
+
+* LLDB executable is now included in pre-built LLVM binaries.
+
+* LLDB now includes full featured support for AArch64 SVE register access.
+
+* LLDB now supports AArch64 Pointer Authentication, allowing stack unwind with signed return address.
+
+* LLDB now supports debugging programs on AArch64 Linux that use memory tagging (MTE).
+* Added ``memory tag read`` and ``memory tag write`` commands.
+* The ``memory region`` command will note when a region has memory tagging enabled.
+* Synchronous and asynchronous tag faults are recognised.
+* Synchronous tag faults have memory tag annotations in addition to the usual fault address.
 
 Changes to Sanitizers
 ---------------------

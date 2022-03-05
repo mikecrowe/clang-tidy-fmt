@@ -40,6 +40,9 @@ static std::unique_ptr<FrontendAction> CreateFrontendBaseAction(
   case DebugUnparse:
     return std::make_unique<DebugUnparseAction>();
     break;
+  case DebugUnparseNoSema:
+    return std::make_unique<DebugUnparseNoSemaAction>();
+    break;
   case DebugUnparseWithSymbols:
     return std::make_unique<DebugUnparseWithSymbolsAction>();
     break;
@@ -48,6 +51,12 @@ static std::unique_ptr<FrontendAction> CreateFrontendBaseAction(
     break;
   case DebugDumpParseTree:
     return std::make_unique<DebugDumpParseTreeAction>();
+    break;
+  case DebugDumpParseTreeNoSema:
+    return std::make_unique<DebugDumpParseTreeNoSemaAction>();
+    break;
+  case DebugDumpAll:
+    return std::make_unique<DebugDumpAllAction>();
     break;
   case DebugDumpProvenance:
     return std::make_unique<DebugDumpProvenanceAction>();
@@ -61,8 +70,14 @@ static std::unique_ptr<FrontendAction> CreateFrontendBaseAction(
   case DebugPreFIRTree:
     return std::make_unique<DebugPreFIRTreeAction>();
     break;
+  case GetDefinition:
+    return std::make_unique<GetDefinitionAction>();
+    break;
   case GetSymbolsSources:
     return std::make_unique<GetSymbolsSourcesAction>();
+    break;
+  case InitOnly:
+    return std::make_unique<InitOnlyAction>();
     break;
   default:
     break;
@@ -88,7 +103,7 @@ std::unique_ptr<FrontendAction> CreateFrontendAction(CompilerInstance &ci) {
 bool ExecuteCompilerInvocation(CompilerInstance *flang) {
   // Honor -help.
   if (flang->frontendOpts().showHelp_) {
-    clang::driver::getDriverOptTable().PrintHelp(llvm::outs(),
+    clang::driver::getDriverOptTable().printHelp(llvm::outs(),
         "flang-new -fc1 [options] file...", "LLVM 'Flang' Compiler",
         /*Include=*/clang::driver::options::FC1Option,
         /*Exclude=*/llvm::opt::DriverFlag::HelpHidden,

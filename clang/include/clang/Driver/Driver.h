@@ -84,6 +84,9 @@ class Driver {
   /// LTO mode selected via -f(no-)?lto(=.*)? options.
   LTOKind LTOMode;
 
+  /// LTO mode selected via -f(no-offload-)?lto(=.*)? options.
+  LTOKind OffloadLTOMode;
+
 public:
   enum OpenMPRuntimeKind {
     /// An unknown OpenMP runtime. We can't generate effective OpenMP code
@@ -377,12 +380,6 @@ public:
   /// to determine if an error occurred.
   Compilation *BuildCompilation(ArrayRef<const char *> Args);
 
-  /// @name Driver Steps
-  /// @{
-
-  /// ParseDriverMode - Look for and handle the driver mode option in Args.
-  void ParseDriverMode(StringRef ProgramName, ArrayRef<const char *> Args);
-
   /// ParseArgStrings - Parse the given list of strings into an
   /// ArgList.
   llvm::opt::InputArgList ParseArgStrings(ArrayRef<const char *> Args,
@@ -559,10 +556,14 @@ public:
   bool ShouldEmitStaticLibrary(const llvm::opt::ArgList &Args) const;
 
   /// Returns true if we are performing any kind of LTO.
-  bool isUsingLTO() const { return LTOMode != LTOK_None; }
+  bool isUsingLTO(bool IsOffload = false) const {
+    return getLTOMode(IsOffload) != LTOK_None;
+  }
 
   /// Get the specific kind of LTO being performed.
-  LTOKind getLTOMode() const { return LTOMode; }
+  LTOKind getLTOMode(bool IsOffload = false) const {
+    return IsOffload ? OffloadLTOMode : LTOMode;
+  }
 
 private:
 
@@ -577,9 +578,9 @@ private:
   /// \returns true, if error occurred while reading.
   bool readConfigFile(StringRef FileName);
 
-  /// Set the driver mode (cl, gcc, etc) from an option string of the form
-  /// --driver-mode=<mode>.
-  void setDriverModeFromOption(StringRef Opt);
+  /// Set the driver mode (cl, gcc, etc) from the value of the `--driver-mode`
+  /// option.
+  void setDriverMode(StringRef DriverModeValue);
 
   /// Parse the \p Args list for LTO options and record the type of LTO
   /// compilation based on which -f(no-)?lto(=.*)? option occurs last.
@@ -638,6 +639,16 @@ bool isOptimizationLevelFast(const llvm::opt::ArgList &Args);
 
 /// \return True if the argument combination will end up generating remarks.
 bool willEmitRemarks(const llvm::opt::ArgList &Args);
+
+/// Returns the driver mode option's value, i.e. `X` in `--driver-mode=X`. If \p
+/// Args doesn't mention one explicitly, tries to deduce from `ProgName`.
+/// Returns empty on failure.
+/// Common values are "gcc", "g++", "cpp", "cl" and "flang". Returned value need
+/// not be one of these.
+llvm::StringRef getDriverMode(StringRef ProgName, ArrayRef<const char *> Args);
+
+/// Checks whether the value produced by getDriverMode is for CL mode.
+bool IsClangCL(StringRef DriverMode);
 
 } // end namespace driver
 } // end namespace clang

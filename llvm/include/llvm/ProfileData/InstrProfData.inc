@@ -129,6 +129,7 @@ INSTR_PROF_VALUE_NODE(PtrToNodeT, llvm::Type::getInt8PtrTy(Ctx), Next, \
 #endif
 INSTR_PROF_RAW_HEADER(uint64_t, Magic, __llvm_profile_get_magic())
 INSTR_PROF_RAW_HEADER(uint64_t, Version, __llvm_profile_get_version())
+INSTR_PROF_RAW_HEADER(uint64_t, BinaryIdsSize, __llvm_write_binary_ids(NULL))
 INSTR_PROF_RAW_HEADER(uint64_t, DataSize, DataSize)
 INSTR_PROF_RAW_HEADER(uint64_t, PaddingBytesBeforeCounters, PaddingBytesBeforeCounters)
 INSTR_PROF_RAW_HEADER(uint64_t, CountersSize, CountersSize)
@@ -645,7 +646,7 @@ serializeValueProfDataFrom(ValueProfRecordClosure *Closure,
         (uint64_t)'f' << 16 | (uint64_t)'R' << 8 | (uint64_t)129
 
 /* Raw profile format version (start from 1). */
-#define INSTR_PROF_RAW_VERSION 5
+#define INSTR_PROF_RAW_VERSION 7
 /* Indexed profile format version (start from 1). */
 #define INSTR_PROF_INDEX_VERSION 7
 /* Coverage mapping format version (start from 0). */
@@ -664,6 +665,7 @@ serializeValueProfDataFrom(ValueProfRecordClosure *Closure,
 #define VARIANT_MASK_INSTR_ENTRY (0x1ULL << 58)
 #define INSTR_PROF_RAW_VERSION_VAR __llvm_profile_raw_version
 #define INSTR_PROF_PROFILE_RUNTIME_VAR __llvm_profile_runtime
+#define INSTR_PROF_PROFILE_COUNTER_BIAS_VAR __llvm_profile_counter_bias
 
 /* The variable that holds the name of the profile data
  * specified via command line. */

@@ -181,6 +181,11 @@ bool ConstantRange::getEquivalentICmp(CmpInst::Predicate &Pred,
   return Success;
 }
 
+bool ConstantRange::icmp(CmpInst::Predicate Pred,
+                         const ConstantRange &Other) const {
+  return makeSatisfyingICmpRegion(Pred, Other).contains(*this);
+}
+
 /// Exact mul nuw region for single element RHS.
 static ConstantRange makeExactMulNUWRegion(const APInt &V) {
   unsigned BitWidth = V.getBitWidth();
@@ -1216,6 +1221,15 @@ ConstantRange ConstantRange::urem(const ConstantRange &RHS) const {
   if (isEmptySet() || RHS.isEmptySet() || RHS.getUnsignedMax().isNullValue())
     return getEmpty();
 
+  if (const APInt *RHSInt = RHS.getSingleElement()) {
+    // UREM by null is UB.
+    if (RHSInt->isNullValue())
+      return getEmpty();
+    // Use APInt's implementation of UREM for single element ranges.
+    if (const APInt *LHSInt = getSingleElement())
+      return {LHSInt->urem(*RHSInt)};
+  }
+
   // L % R for L < R is L.
   if (getUnsignedMax().ult(RHS.getUnsignedMin()))
     return *this;
@@ -1228,6 +1242,15 @@ ConstantRange ConstantRange::urem(const ConstantRange &RHS) const {
 ConstantRange ConstantRange::srem(const ConstantRange &RHS) const {
   if (isEmptySet() || RHS.isEmptySet())
     return getEmpty();
+
+  if (const APInt *RHSInt = RHS.getSingleElement()) {
+    // SREM by null is UB.
+    if (RHSInt->isNullValue())
+      return getEmpty();
+    // Use APInt's implementation of SREM for single element ranges.
+    if (const APInt *LHSInt = getSingleElement())
+      return {LHSInt->srem(*RHSInt)};
+  }
 
   ConstantRange AbsRHS = RHS.abs();
   APInt MinAbsRHS = AbsRHS.getUnsignedMin();

@@ -74,14 +74,23 @@ Improvements to clang-tidy
   attached to warnings. These are typically cases where we are less confident
   the fix will have the desired effect.
 
+- libToolingCore and Clang-Tidy was refactored and now checks can produce
+  highlights (`^~~~~` under fragments of the source code) in diagnostics.
+  Existing and new checks in the future can be expected to start implementing
+  this functionality.
+  This change only affects the visual rendering of diagnostics, and does not
+  alter the behavior of generated fixes.
+
 New checks
 ^^^^^^^^^^
 
-- New :doc:`concurrency-thread-canceltype-asynchronous
-  <clang-tidy/checks/concurrency-thread-canceltype-asynchronous>` check.
 
-  Finds ``pthread_setcanceltype`` function calls where a thread's cancellation
-  type is set to asynchronous.
+- New :doc:`altera-id-dependent-backward-branch
+  <clang-tidy/checks/altera-id-dependent-backward-branch>` check.
+
+  Finds ID-dependent variables and fields that are used within loops. This
+  causes branches to occur inside the loops, and thus leads to performance
+  degradation.
 
 - New :doc:`altera-unroll-loops
   <clang-tidy/checks/altera-unroll-loops>` check.
@@ -89,11 +98,41 @@ New checks
   Finds inner loops that have not been unrolled, as well as fully unrolled
   loops with unknown loops bounds or a large number of iterations.
 
+- New :doc:`bugprone-easily-swappable-parameters
+  <clang-tidy/checks/bugprone-easily-swappable-parameters>` check.
+
+  Finds function definitions where parameters of convertible types follow each
+  other directly, making call sites prone to calling the function with
+  swapped (or badly ordered) arguments.
+
+- New :doc:`bugprone-implicit-widening-of-multiplication-result
+  <clang-tidy/checks/bugprone-implicit-widening-of-multiplication-result>` check.
+
+  Diagnoses instances of an implicit widening of multiplication result.
+
+- New :doc:`bugprone-unhandled-exception-at-new
+  <clang-tidy/checks/bugprone-unhandled-exception-at-new>` check.
+
+  Finds calls to ``new`` with missing exception handler for ``std::bad_alloc``.
+
+- New :doc:`concurrency-thread-canceltype-asynchronous
+  <clang-tidy/checks/concurrency-thread-canceltype-asynchronous>` check.
+
+  Finds ``pthread_setcanceltype`` function calls where a thread's cancellation
+  type is set to asynchronous.
+
 - New :doc:`cppcoreguidelines-prefer-member-initializer
   <clang-tidy/checks/cppcoreguidelines-prefer-member-initializer>` check.
 
   Finds member initializations in the constructor body which can be placed into
   the initialization list instead.
+
+- New :doc:`readability-suspicious-call-argument
+  <clang-tidy/checks/readability-suspicious-call-argument>` check.
+
+  Finds function calls where the arguments passed are provided out of order,
+  based on the difference between the argument name and the parameter names
+  of the function.
 
 New check aliases
 ^^^^^^^^^^^^^^^^^
@@ -103,6 +142,7 @@ New check aliases
   :doc:`concurrency-thread-canceltype-asynchronous
   <clang-tidy/checks/concurrency-thread-canceltype-asynchronous>` was added.
 
+
 Changes in existing checks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -111,6 +151,14 @@ Changes in existing checks
 
   Added an option to choose the set of allowed functions.
 
+- Improved :doc:`cppcoreguidelines-init-variables
+  <clang-tidy/checks/cppcoreguidelines-init-variables>` check.
+
+  Removed generating fixes for enums because the code generated was broken,
+  trying to initialize the enum from an integer.
+
+  The check now also warns for uninitialized scoped enums.
+
 - Improved :doc:`readability-uniqueptr-delete-release
   <clang-tidy/checks/readability-uniqueptr-delete-release>` check.
 
@@ -118,11 +166,12 @@ Changes in existing checks
   function or assignment to ``nullptr``.
   Added support for pointers to ``std::unique_ptr``.
 
+
 Removed checks
 ^^^^^^^^^^^^^^
 
 - The readability-deleted-default check has been removed.
-  
+
   The clang warning `Wdefaulted-function-deleted
   <https://clang.llvm.org/docs/DiagnosticsReference.html#wdefaulted-function-deleted>`_
   will diagnose the same issues and is enabled by default.

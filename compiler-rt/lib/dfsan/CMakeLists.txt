@@ -3,14 +3,17 @@ include_directories(..)
 # Runtime library sources and build flags.
 set(DFSAN_RTL_SOURCES
   dfsan.cpp
+  dfsan_allocator.cpp
   dfsan_chained_origin_depot.cpp
   dfsan_custom.cpp
   dfsan_interceptors.cpp
+  dfsan_new_delete.cpp
   dfsan_thread.cpp
   )
 
 set(DFSAN_RTL_HEADERS
   dfsan.h
+  dfsan_allocator.h
   dfsan_chained_origin_depot.h
   dfsan_flags.inc
   dfsan_flags.h
@@ -62,4 +65,4 @@ add_custom_command(OUTPUT ${dfsan_abilist_filename}
                    DEPENDS done_abilist.txt libc_ubuntu1404_abilist.txt)
 add_dependencies(dfsan dfsan_abilist)
 install(FILES ${dfsan_abilist_filename}
-        DESTINATION ${COMPILER_RT_INSTALL_PATH}/share)
+        DESTINATION ${COMPILER_RT_INSTALL_DATA_DIR})

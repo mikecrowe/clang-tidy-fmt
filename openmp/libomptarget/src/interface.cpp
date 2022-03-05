@@ -44,6 +44,10 @@ EXTERN void __tgt_register_lib(__tgt_bin_desc *desc) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Initialize all available devices without registering any image
+EXTERN void __tgt_init_all_rtls() { PM->RTLs.initAllRTLs(); }
+
+////////////////////////////////////////////////////////////////////////////////
 /// unloads a target shared library
 EXTERN void __tgt_unregister_lib(__tgt_bin_desc *desc) {
   TIMESCOPE();
@@ -456,4 +460,18 @@ EXTERN void __kmpc_push_target_tripcount_mapper(ident_t *loc, int64_t device_id,
   PM->Devices[device_id].LoopTripCnt.emplace(__kmpc_global_thread_num(NULL),
                                              loop_tripcount);
   PM->TblMapMtx.unlock();
+}
+
+EXTERN void __tgt_set_info_flag(uint32_t NewInfoLevel) {
+  std::atomic<uint32_t> &InfoLevel = getInfoLevelInternal();
+  InfoLevel.store(NewInfoLevel);
+  for (auto &R : PM->RTLs.AllRTLs) {
+    if (R.set_info_flag)
+      R.set_info_flag(NewInfoLevel);
+  }
+}
+
+EXTERN int __tgt_print_device_info(int64_t device_id) {
+  return PM->Devices[device_id].printDeviceInfo(
+      PM->Devices[device_id].RTLDeviceID);
 }

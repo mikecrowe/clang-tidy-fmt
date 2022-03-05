@@ -8,9 +8,9 @@
 
 #include "AVR.h"
 #include "CommonArgs.h"
-#include "InputInfo.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/DriverDiagnostic.h"
+#include "clang/Driver/InputInfo.h"
 #include "clang/Driver/Options.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringExtras.h"
@@ -351,6 +351,23 @@ AVRToolChain::AVRToolChain(const Driver &D, const llvm::Triple &Triple,
     if (!LinkStdlib)
       D.Diag(diag::warn_drv_avr_stdlib_not_linked);
   }
+}
+
+void AVRToolChain::AddClangSystemIncludeArgs(const ArgList &DriverArgs,
+                                             ArgStringList &CC1Args) const {
+  if (DriverArgs.hasArg(options::OPT_nostdinc) ||
+      DriverArgs.hasArg(options::OPT_nostdlibinc))
+    return;
+
+  // Omit if there is no avr-libc installed.
+  Optional<std::string> AVRLibcRoot = findAVRLibcInstallation();
+  if (!AVRLibcRoot.hasValue())
+    return;
+
+  // Add 'avr-libc/include' to clang system include paths if applicable.
+  std::string AVRInc = AVRLibcRoot.getValue() + "/include";
+  if (llvm::sys::fs::is_directory(AVRInc))
+    addSystemInclude(DriverArgs, CC1Args, AVRInc);
 }
 
 Tool *AVRToolChain::buildLinker() const {

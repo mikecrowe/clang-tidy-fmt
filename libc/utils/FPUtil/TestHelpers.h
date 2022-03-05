@@ -41,13 +41,13 @@ public:
     fputil::FPBits<T> actualBits(actual), expectedBits(expected);
     if (Condition == __llvm_libc::testing::Cond_EQ)
       return (actualBits.isNaN() && expectedBits.isNaN()) ||
-             (actualBits.bitsAsUInt() == expectedBits.bitsAsUInt());
+             (actualBits.uintval() == expectedBits.uintval());
 
     // If condition == Cond_NE.
     if (actualBits.isNaN())
       return !expectedBits.isNaN();
     return expectedBits.isNaN() ||
-           (actualBits.bitsAsUInt() != expectedBits.bitsAsUInt());
+           (actualBits.uintval() != expectedBits.uintval());
   }
 
   void explainError(testutils::StreamWrapper &stream) override {
@@ -61,16 +61,51 @@ FPMatcher<T, C> getMatcher(T expectedValue) {
   return FPMatcher<T, C>(expectedValue);
 }
 
+// TODO: Make the matcher match specific exceptions instead of just identifying
+// that an exception was raised.
+class FPExceptMatcher : public __llvm_libc::testing::Matcher<bool> {
+  bool exceptionRaised;
+
+public:
+  class FunctionCaller {
+  public:
+    virtual ~FunctionCaller(){};
+    virtual void call() = 0;
+  };
+
+  template <typename Func> static FunctionCaller *getFunctionCaller(Func func) {
+    struct Callable : public FunctionCaller {
+      Func f;
+      explicit Callable(Func theFunc) : f(theFunc) {}
+      void call() override { f(); }
+    };
+
+    return new Callable(func);
+  }
+
+  // Takes ownership of func.
+  explicit FPExceptMatcher(FunctionCaller *func);
+
+  bool match(bool unused) { return exceptionRaised; }
+
+  void explainError(testutils::StreamWrapper &stream) override {
+    stream << "A floating point exception should have been raised but it "
+           << "wasn't\n";
+  }
+};
+
 } // namespace testing
 } // namespace fputil
 } // namespace __llvm_libc
 
 #define DECLARE_SPECIAL_CONSTANTS(T)                                           \
-  static const T zero = __llvm_libc::fputil::FPBits<T>::zero();                \
-  static const T negZero = __llvm_libc::fputil::FPBits<T>::negZero();          \
-  static const T aNaN = __llvm_libc::fputil::FPBits<T>::buildNaN(1);           \
-  static const T inf = __llvm_libc::fputil::FPBits<T>::inf();                  \
-  static const T negInf = __llvm_libc::fputil::FPBits<T>::negInf();
+  using FPBits = __llvm_libc::fputil::FPBits<T>;                               \
+  using UIntType = typename FPBits::UIntType;                                  \
+  const T zero = T(FPBits::zero());                                            \
+  const T negZero = T(FPBits::negZero());                                      \
+  const T aNaN = T(FPBits::buildNaN(1));                                       \
+  const T inf = T(FPBits::inf());                                              \
+  const T negInf = T(FPBits::negInf());
 
 #define EXPECT_FP_EQ(expected, actual)                                         \
   EXPECT_THAT(                                                                 \
@@ -95,5 +130,16 @@ FPMatcher<T, C> getMatcher(T expectedValue) {
       actual,                                                                  \
       __llvm_libc::fputil::testing::getMatcher<__llvm_libc::testing::Cond_NE>( \
           expected))
+
+#ifdef LLVM_LIBC_TEST_USE_FUCHSIA
+#define ASSERT_RAISES_FP_EXCEPT(func) ASSERT_DEATH(func, WITH_SIGNAL(SIGFPE))
+#else
+#define ASSERT_RAISES_FP_EXCEPT(func)                                          \
+  ASSERT_THAT(                                                                 \
+      true,                                                                    \
+      __llvm_libc::fputil::testing::FPExceptMatcher(                           \
+          __llvm_libc::fputil::testing::FPExceptMatcher::getFunctionCaller(    \
+              func)))
+#endif // LLVM_LIBC_TEST_USE_FUCHSIA
 
 #endif // LLVM_LIBC_UTILS_FPUTIL_TEST_HELPERS_H

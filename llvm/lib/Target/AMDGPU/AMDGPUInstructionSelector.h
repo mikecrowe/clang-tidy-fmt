@@ -109,6 +109,7 @@ private:
   bool selectG_PTR_ADD(MachineInstr &I) const;
   bool selectG_IMPLICIT_DEF(MachineInstr &I) const;
   bool selectG_INSERT(MachineInstr &I) const;
+  bool selectG_SBFX_UBFX(MachineInstr &I) const;
 
   bool selectInterpP1F16(MachineInstr &MI) const;
   bool selectWritelane(MachineInstr &MI) const;
@@ -192,14 +193,15 @@ private:
   InstructionSelector::ComplexRendererFns
   selectSmrdSgpr(MachineOperand &Root) const;
 
-  template <bool Signed>
-  std::pair<Register, int>
-  selectFlatOffsetImpl(MachineOperand &Root) const;
+  std::pair<Register, int> selectFlatOffsetImpl(MachineOperand &Root,
+                                                uint64_t FlatVariant) const;
 
   InstructionSelector::ComplexRendererFns
   selectFlatOffset(MachineOperand &Root) const;
   InstructionSelector::ComplexRendererFns
-  selectFlatOffsetSigned(MachineOperand &Root) const;
+  selectGlobalOffset(MachineOperand &Root) const;
+  InstructionSelector::ComplexRendererFns
+  selectScratchOffset(MachineOperand &Root) const;
 
   InstructionSelector::ComplexRendererFns
   selectGlobalSAddr(MachineOperand &Root) const;

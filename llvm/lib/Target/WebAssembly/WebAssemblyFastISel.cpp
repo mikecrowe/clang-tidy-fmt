@@ -16,11 +16,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "MCTargetDesc/WebAssemblyMCTargetDesc.h"
+#include "Utils/WebAssemblyUtilities.h"
 #include "WebAssembly.h"
 #include "WebAssemblyMachineFunctionInfo.h"
 #include "WebAssemblySubtarget.h"
 #include "WebAssemblyTargetMachine.h"
-#include "WebAssemblyUtilities.h"
 #include "llvm/Analysis/BranchProbabilityInfo.h"
 #include "llvm/CodeGen/FastISel.h"
 #include "llvm/CodeGen/FunctionLoweringInfo.h"
@@ -130,9 +130,12 @@ private:
     case MVT::i64:
     case MVT::f32:
     case MVT::f64:
+      return VT;
     case MVT::funcref:
     case MVT::externref:
-      return VT;
+      if (Subtarget->hasReferenceTypes())
+        return VT;
+      break;
     case MVT::f16:
       return MVT::f32;
     case MVT::v16i8:
@@ -154,7 +157,7 @@ private:
   void addLoadStoreOperands(const Address &Addr, const MachineInstrBuilder &MIB,
                             MachineMemOperand *MMO);
   unsigned maskI1Value(unsigned Reg, const Value *V);
-  unsigned getRegForI1Value(const Value *V, bool &Not);
+  unsigned getRegForI1Value(const Value *V, const BasicBlock *BB, bool &Not);
   unsigned zeroExtendToI32(unsigned Reg, const Value *V,
                            MVT::SimpleValueType From);
   unsigned signExtendToI32(unsigned Reg, const Value *V,
@@ -415,19 +418,16 @@ unsigned WebAssemblyFastISel::maskI1Value(unsigned Reg, const Value *V) {
   return zeroExtendToI32(Reg, V, MVT::i1);
 }
 
-unsigned WebAssemblyFastISel::getRegForI1Value(const Value *V, bool &Not) {
+unsigned WebAssemblyFastISel::getRegForI1Value(const Value *V,
+                                               const BasicBlock *BB,
+                                               bool &Not) {
   if (const auto *ICmp = dyn_cast<ICmpInst>(V))
     if (const ConstantInt *C = dyn_cast<ConstantInt>(ICmp->getOperand(1)))
-      if (ICmp->isEquality() && C->isZero() && C->getType()->isIntegerTy(32)) {
+      if (ICmp->isEquality() && C->isZero() && C->getType()->isIntegerTy(32) &&
+          ICmp->getParent() == BB) {
         Not = ICmp->isTrueWhenEqual();
         return getRegForValue(ICmp->getOperand(0));
       }
-
-  Value *NotV;
-  if (match(V, m_Not(m_Value(NotV))) && V->getType()->isIntegerTy(32)) {
-    Not = true;
-    return getRegForValue(NotV);
-  }
 
   Not = false;
   unsigned Reg = getRegForValue(V);
@@ -909,7 +909,8 @@ bool WebAssemblyFastISel::selectSelect(const Instruction *I) {
   const auto *Select = cast<SelectInst>(I);
 
   bool Not;
-  unsigned CondReg = getRegForI1Value(Select->getCondition(), Not);
+  unsigned CondReg =
+      getRegForI1Value(Select->getCondition(), I->getParent(), Not);
   if (CondReg == 0)
     return false;
 
@@ -1182,6 +1183,8 @@ bool WebAssemblyFastISel::selectLoad(const Instruction *I) {
   const auto *Load = cast<LoadInst>(I);
   if (Load->isAtomic())
     return false;
+  if (!WebAssembly::isDefaultAddressSpace(Load->getPointerAddressSpace()))
+    return false;
   if (!Subtarget->hasSIMD128() && Load->getType()->isVectorTy())
     return false;
 
@@ -1239,6 +1242,8 @@ bool WebAssemblyFastISel::selectLoad(const Instruction *I) {
 bool WebAssemblyFastISel::selectStore(const Instruction *I) {
   const auto *Store = cast<StoreInst>(I);
   if (Store->isAtomic())
+    return false;
+  if (!WebAssembly::isDefaultAddressSpace(Store->getPointerAddressSpace()))
     return false;
   if (!Subtarget->hasSIMD128() &&
       Store->getValueOperand()->getType()->isVectorTy())
@@ -1305,7 +1310,7 @@ bool WebAssemblyFastISel::selectBr(const Instruction *I) {
   MachineBasicBlock *FBB = FuncInfo.MBBMap[Br->getSuccessor(1)];
 
   bool Not;
-  unsigned CondReg = getRegForI1Value(Br->getCondition(), Not);
+  unsigned CondReg = getRegForI1Value(Br->getCondition(), Br->getParent(), Not);
   if (CondReg == 0)
     return false;
 

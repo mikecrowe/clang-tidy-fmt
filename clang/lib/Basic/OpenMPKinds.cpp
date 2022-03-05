@@ -177,6 +177,7 @@ unsigned clang::getOpenMPSimpleClauseType(OpenMPClauseKind Kind, StringRef Str,
   case OMPC_nontemporal:
   case OMPC_destroy:
   case OMPC_novariants:
+  case OMPC_nocontext:
   case OMPC_detach:
   case OMPC_inclusive:
   case OMPC_exclusive:
@@ -420,6 +421,7 @@ const char *clang::getOpenMPSimpleClauseTypeName(OpenMPClauseKind Kind,
   case OMPC_destroy:
   case OMPC_detach:
   case OMPC_novariants:
+  case OMPC_nocontext:
   case OMPC_inclusive:
   case OMPC_exclusive:
   case OMPC_uses_allocators:
@@ -450,7 +452,8 @@ bool clang::isOpenMPLoopDirective(OpenMPDirectiveKind DKind) {
          DKind == OMPD_target_teams_distribute ||
          DKind == OMPD_target_teams_distribute_parallel_for ||
          DKind == OMPD_target_teams_distribute_parallel_for_simd ||
-         DKind == OMPD_target_teams_distribute_simd || DKind == OMPD_tile;
+         DKind == OMPD_target_teams_distribute_simd || DKind == OMPD_tile ||
+         DKind == OMPD_unroll;
 }
 
 bool clang::isOpenMPWorksharingDirective(OpenMPDirectiveKind DKind) {
@@ -578,7 +581,7 @@ bool clang::isOpenMPLoopBoundSharingDirective(OpenMPDirectiveKind Kind) {
 }
 
 bool clang::isOpenMPLoopTransformationDirective(OpenMPDirectiveKind DKind) {
-  return DKind == OMPD_tile;
+  return DKind == OMPD_tile || DKind == OMPD_unroll;
 }
 
 void clang::getOpenMPCaptureRegions(
@@ -666,6 +669,7 @@ void clang::getOpenMPCaptureRegions(
     CaptureRegions.push_back(OMPD_unknown);
     break;
   case OMPD_tile:
+  case OMPD_unroll:
     // loop transformations do not introduce captures.
     break;
   case OMPD_threadprivate:

@@ -87,6 +87,9 @@ bool RISCVTargetInfo::validateAsmConstraint(
     // An address that is held in a general-purpose register.
     Info.setAllowsMemory();
     return true;
+  case 'S': // A symbolic address
+    Info.setAllowsRegister();
+    return true;
   case 'v':
     // A vector register.
     if (Name[1] == 'r' || Name[1] == 'm') {
@@ -239,6 +242,16 @@ ArrayRef<Builtin::Info> RISCVTargetInfo::getTargetBuiltins() const {
                                              Builtin::FirstTSBuiltin);
 }
 
+bool RISCVTargetInfo::initFeatureMap(
+    llvm::StringMap<bool> &Features, DiagnosticsEngine &Diags, StringRef CPU,
+    const std::vector<std::string> &FeaturesVec) const {
+
+  if (getTriple().getArch() == llvm::Triple::riscv64)
+    Features["64bit"] = true;
+
+  return TargetInfo::initFeatureMap(Features, Diags, CPU, FeaturesVec);
+}
+
 /// Return true if has this feature, need to sync with handleTargetFeatures.
 bool RISCVTargetInfo::hasFeature(StringRef Feature) const {
   bool Is64Bit = getTriple().getArch() == llvm::Triple::riscv64;
@@ -246,6 +259,7 @@ bool RISCVTargetInfo::hasFeature(StringRef Feature) const {
       .Case("riscv", true)
       .Case("riscv32", !Is64Bit)
       .Case("riscv64", Is64Bit)
+      .Case("64bit", Is64Bit)
       .Case("m", HasM)
       .Case("a", HasA)
       .Case("f", HasF)

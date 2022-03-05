@@ -58,7 +58,8 @@ class User;
 class BranchProbabilityInfo;
 class BlockFrequencyInfo;
 
-class Function : public GlobalObject, public ilist_node<Function> {
+class LLVM_EXTERNAL_VISIBILITY Function : public GlobalObject,
+                                          public ilist_node<Function> {
 public:
   using BasicBlockListType = SymbolTableList<BasicBlock>;
 
@@ -152,6 +153,16 @@ public:
   /// by the module's data layout.
   static Function *Create(FunctionType *Ty, LinkageTypes Linkage,
                           const Twine &N, Module &M);
+
+  /// Creates a function with some attributes recorded in llvm.module.flags
+  /// applied.
+  ///
+  /// Use this when synthesizing new functions that need attributes that would
+  /// have been set by command line options.
+  static Function *createWithDefaultAttr(FunctionType *Ty, LinkageTypes Linkage,
+                                         unsigned AddrSpace,
+                                         const Twine &N = "",
+                                         Module *M = nullptr);
 
   // Provide fast operand accessors.
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Value);
@@ -481,6 +492,10 @@ public:
 
   MaybeAlign getParamAlign(unsigned ArgNo) const {
     return AttributeSets.getParamAlignment(ArgNo);
+  }
+
+  MaybeAlign getParamStackAlign(unsigned ArgNo) const {
+    return AttributeSets.getParamStackAlignment(ArgNo);
   }
 
   /// Extract the byval type for a parameter.
@@ -895,7 +910,7 @@ public:
   ///
   bool hasAddressTaken(const User ** = nullptr,
                        bool IgnoreCallbackUses = false,
-                       bool IgnoreAssumeLikeCalls = false,
+                       bool IgnoreAssumeLikeCalls = true,
                        bool IngoreLLVMUsed = false) const;
 
   /// isDefTriviallyDead - Return true if it is trivially safe to remove
