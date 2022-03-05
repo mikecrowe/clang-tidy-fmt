@@ -1656,6 +1656,7 @@
 // CHECK_SPR_M32: #define __AVX512BW__ 1
 // CHECK_SPR_M32: #define __AVX512CD__ 1
 // CHECK_SPR_M32: #define __AVX512DQ__ 1
+// CHECK_SPR_M32: #define __AVX512FP16__ 1
 // CHECK_SPR_M32: #define __AVX512F__ 1
 // CHECK_SPR_M32: #define __AVX512IFMA__ 1
 // CHECK_SPR_M32: #define __AVX512VBMI2__ 1
@@ -1727,6 +1728,7 @@
 // CHECK_SPR_M64: #define __AVX512BW__ 1
 // CHECK_SPR_M64: #define __AVX512CD__ 1
 // CHECK_SPR_M64: #define __AVX512DQ__ 1
+// CHECK_SPR_M64: #define __AVX512FP16__ 1
 // CHECK_SPR_M64: #define __AVX512F__ 1
 // CHECK_SPR_M64: #define __AVX512IFMA__ 1
 // CHECK_SPR_M64: #define __AVX512VBMI2__ 1
@@ -3477,8 +3479,8 @@
 // CHECK_SPARC-V9-NOT: #define __sparcv8 1
 // CHECK_SPARC-V9-NOT: #define __sparcv8__ 1
 // CHECK_SPARC-V9: #define __sparc_v9__ 1
-// CHECK_SPARC-V9: #define __sparcv9 1
-// CHECK_SPARC-V9: #define __sparcv9__ 1
+// CHECK_SPARC-V9-NOT: #define __sparcv9 1
+// CHECK_SPARC-V9-NOT: #define __sparcv9__ 1
 
 // RUN: %clang -E -dM %s -o - 2>&1 \
 // RUN:     -target sparc-sun-solaris \

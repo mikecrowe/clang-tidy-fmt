@@ -526,7 +526,7 @@ Status NativeRegisterContextLinux_arm64::WriteAllRegisterValues(
 
   uint8_t *src = data_sp->GetBytes();
   if (src == nullptr) {
-    error.SetErrorStringWithFormat("NativeRegisterContextLinux_x86_64::%s "
+    error.SetErrorStringWithFormat("NativeRegisterContextLinux_arm64::%s "
                                    "DataBuffer::GetBytes() returned a null "
                                    "pointer",
                                    __FUNCTION__);

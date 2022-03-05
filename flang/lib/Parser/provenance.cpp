@@ -159,6 +159,8 @@ const char &AllSources::operator[](Provenance at) const {
   return origin[origin.covers.MemberOffset(at)];
 }
 
+void AllSources::ClearSearchPath() { searchPath_.clear(); }
+
 void AllSources::AppendSearchPathDirectory(std::string directory) {
   // gfortran and ifort append to current path, PGI prepends
   searchPath_.push_back(directory);
@@ -323,12 +325,20 @@ const char *AllSources::GetSource(ProvenanceRange range) const {
 std::optional<SourcePosition> AllSources::GetSourcePosition(
     Provenance prov) const {
   const Origin &origin{MapToOrigin(prov)};
-  if (const auto *inc{std::get_if<Inclusion>(&origin.u)}) {
-    std::size_t offset{origin.covers.MemberOffset(prov)};
-    return inc->source.FindOffsetLineAndColumn(offset);
-  } else {
-    return std::nullopt;
-  }
+  return std::visit(
+      common::visitors{
+          [&](const Inclusion &inc) -> std::optional<SourcePosition> {
+            std::size_t offset{origin.covers.MemberOffset(prov)};
+            return inc.source.FindOffsetLineAndColumn(offset);
+          },
+          [&](const Macro &) {
+            return GetSourcePosition(origin.replaces.start());
+          },
+          [](const CompilerInsertion &) -> std::optional<SourcePosition> {
+            return std::nullopt;
+          },
+      },
+      origin.u);
 }
 
 std::optional<ProvenanceRange> AllSources::GetFirstFileProvenance() const {
@@ -593,7 +603,7 @@ std::optional<CharBlock> AllCookedSources::GetCharBlock(
       return result;
     }
   }
-  return nullptr;
+  return std::nullopt;
 }
 
 void AllCookedSources::Dump(llvm::raw_ostream &o) const {

@@ -136,9 +136,9 @@ define i64 @select_max32_2_i64(i64 %offset, i64 %x) {
 ; CHECK-LABEL: select_max32_2_i64:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    leaq 2(%rdi), %rax
-; CHECK-NEXT:    addq $2147483647, %rdi # imm = 0x7FFFFFFF
+; CHECK-NEXT:    2147483647(%rdi), %rcx
 ; CHECK-NEXT:    cmpq $41, %rsi
-; CHECK-NEXT:    cmovneq %rdi, %rax
+; CHECK-NEXT:    cmovneq %rcx, %rax
 ; CHECK-NEXT:    retq
   %b = icmp ne i64 %x, 41
   %s = select i1 %b, i64 2147483647, i64 2
@@ -209,10 +209,10 @@ define i32 @select_20_43_i32(i32 %offset, i64 %x) {
 ; CHECK-LABEL: select_20_43_i32:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    # kill: def $edi killed $edi def $rdi
-; CHECK-NEXT:    leal 43(%rdi), %eax
-; CHECK-NEXT:    addl $20, %edi
+; CHECK-NEXT:    leal 43(%rdi), %ecx
+; CHECK-NEXT:    20(%rdi), %eax
 ; CHECK-NEXT:    cmpq $42, %rsi
-; CHECK-NEXT:    cmovgel %edi, %eax
+; CHECK-NEXT:    cmovll %ecx, %eax
 ; CHECK-NEXT:    retq
   %b = icmp sgt i64 %x, 41
   %s = select i1 %b, i32 20, i32 43
@@ -224,10 +224,10 @@ define i16 @select_n2_17_i16(i16 %offset, i1 %b) {
 ; CHECK-LABEL: select_n2_17_i16:
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    # kill: def $edi killed $edi def $rdi
-; CHECK-NEXT:    leal 17(%rdi), %eax
-; CHECK-NEXT:    addl $65534, %edi # imm = 0xFFFE
+; CHECK-NEXT:    leal 17(%rdi), %ecx
+; CHECK-NEXT:    leal 65534(%rdi), %eax
 ; CHECK-NEXT:    testb $1, %sil
-; CHECK-NEXT:    cmovnel %edi, %eax
+; CHECK-NEXT:    cmovel %ecx, %eax
 ; CHECK-NEXT:    # kill: def $ax killed $ax killed $eax
 ; CHECK-NEXT:    retq
   %s = select i1 %b, i16 -2, i16 17
@@ -279,11 +279,11 @@ define void @bullet_load_store(i32 %x, i64 %y, %class.btAxis* %p) {
 ; CHECK:       # %bb.0:
 ; CHECK-NEXT:    leaq (%rsi,%rsi,4), %rax
 ; CHECK-NEXT:    shlq $4, %rax
+; CHECK-NEXT:    leaq 66(%rdx), %rcx
+; CHECK-NEXT:    addq $60, %rdx
 ; CHECK-NEXT:    testb $1, %dil
-; CHECK-NEXT:    leaq 60(%rdx,%rax), %rcx
-; CHECK-NEXT:    leaq 66(%rdx,%rax), %rax
-; CHECK-NEXT:    cmoveq %rcx, %rax
-; CHECK-NEXT:    decw (%rax)
+; CHECK-NEXT:    cmovneq %rcx, %rdx
+; CHECK-NEXT:    decw (%rdx,%rax)
 ; CHECK-NEXT:    retq
   %and = and i32 %x, 1
   %b = icmp eq i32 %and, 0
@@ -299,11 +299,11 @@ define void @bullet_load_store(i32 %x, i64 %y, %class.btAxis* %p) {
 define void @complex_lea_alt1(i1 %b, i16* readnone %ptr, i64 %idx) {
 ; CHECK-LABEL: complex_lea_alt1:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    leaq 60(%rdx,%rsi), %rax
-; CHECK-NEXT:    leaq 66(%rdx,%rsi), %rcx
+; CHECK-NEXT:    leaq 60(%rdx), %rax
+; CHECK-NEXT:    addq $66, %rdx
 ; CHECK-NEXT:    testb $1, %dil
-; CHECK-NEXT:    cmovneq %rax, %rcx
-; CHECK-NEXT:    decw (%rcx)
+; CHECK-NEXT:    cmovneq %rax, %rdx
+; CHECK-NEXT:    decw (%rdx,%rsi)
 ; CHECK-NEXT:    retq
   %i = ptrtoint i16* %ptr to i64
   %sum = add i64 %idx, %i
@@ -320,11 +320,11 @@ define void @complex_lea_alt1(i1 %b, i16* readnone %ptr, i64 %idx) {
 define void @complex_lea_alt2(i1 %b, i16* readnone %ptr, i64 %idx) {
 ; CHECK-LABEL: complex_lea_alt2:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    leaq 60(%rsi,%rdx), %rax
-; CHECK-NEXT:    leaq 66(%rsi,%rdx), %rcx
+; CHECK-NEXT:    leaq 60(%rsi), %rax
+; CHECK-NEXT:    addq $66, %rsi
 ; CHECK-NEXT:    testb $1, %dil
-; CHECK-NEXT:    cmovneq %rax, %rcx
-; CHECK-NEXT:    decw (%rcx)
+; CHECK-NEXT:    cmovneq %rax, %rsi
+; CHECK-NEXT:    decw (%rsi,%rdx)
 ; CHECK-NEXT:    retq
   %i = ptrtoint i16* %ptr to i64
   %sum = add i64 %i, %idx
@@ -433,11 +433,11 @@ define void @complex_lea_alt6(i1 %b, i16* readnone %ptr, i64 %idx) {
 define void @complex_lea_alt7(i1 %b, i16* readnone %ptr, i64 %idx) {
 ; CHECK-LABEL: complex_lea_alt7:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    leaq 60(%rdx,%rsi), %rax
-; CHECK-NEXT:    leaq 66(%rdx,%rsi), %rcx
+; CHECK-NEXT:    leaq 60(%rdx), %rax
+; CHECK-NEXT:    addq $66, %rdx
 ; CHECK-NEXT:    testb $1, %dil
-; CHECK-NEXT:    cmovneq %rax, %rcx
-; CHECK-NEXT:    decw (%rcx)
+; CHECK-NEXT:    cmovneq %rax, %rdx
+; CHECK-NEXT:    decw (%rdx,%rsi)
 ; CHECK-NEXT:    retq
   %i = ptrtoint i16* %ptr to i64
   %o = add i64 %idx, %i
@@ -455,11 +455,11 @@ define void @complex_lea_alt7(i1 %b, i16* readnone %ptr, i64 %idx) {
 define void @complex_lea_alt8(i1 %b, i16* readnone %ptr, i64 %idx) {
 ; CHECK-LABEL: complex_lea_alt8:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    leaq 60(%rsi,%rdx), %rax
-; CHECK-NEXT:    leaq 66(%rsi,%rdx), %rcx
+; CHECK-NEXT:    leaq 60(%rsi), %rax
+; CHECK-NEXT:    addq $66, %rsi
 ; CHECK-NEXT:    testb $1, %dil
-; CHECK-NEXT:    cmovneq %rax, %rcx
-; CHECK-NEXT:    decw (%rcx)
+; CHECK-NEXT:    cmovneq %rax, %rsi
+; CHECK-NEXT:    decw (%rsi,%rdx)
 ; CHECK-NEXT:    retq
   %i = ptrtoint i16* %ptr to i64
   %o = add i64 %i, %idx

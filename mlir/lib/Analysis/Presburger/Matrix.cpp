@@ -65,6 +65,18 @@ unsigned Matrix::appendExtraRow() {
   return nRows - 1;
 }
 
+void Matrix::resizeHorizontally(unsigned newNColumns) {
+  if (newNColumns < nColumns)
+    removeColumns(newNColumns, nColumns - newNColumns);
+  if (newNColumns > nColumns)
+    insertColumns(nColumns, newNColumns - nColumns);
+}
+
+void Matrix::resize(unsigned newNRows, unsigned newNColumns) {
+  resizeHorizontally(newNColumns);
+  resizeVertically(newNRows);
+}
+
 void Matrix::resizeVertically(unsigned newNRows) {
   nRows = newNRows;
   data.resize(nRows * nReservedColumns);
@@ -164,6 +176,11 @@ void Matrix::copyRow(unsigned sourceRow, unsigned targetRow) {
     return;
   for (unsigned c = 0; c < nColumns; ++c)
     at(targetRow, c) = at(sourceRow, c);
+}
+
+void Matrix::fillRow(unsigned row, int64_t value) {
+  for (unsigned col = 0; col < nColumns; ++col)
+    at(row, col) = value;
 }
 
 void Matrix::addToRow(unsigned sourceRow, unsigned targetRow, int64_t scale) {

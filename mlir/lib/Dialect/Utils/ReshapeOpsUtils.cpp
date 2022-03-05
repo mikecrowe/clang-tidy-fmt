@@ -73,6 +73,8 @@ mlir::getReassociationIndicesForReshape(ShapedType sourceType,
     // definition is folding unit-dimensions with the result being scalar type.
     // So only append the `currIndices` if reassociation map is not empty.
     if (targetDim == targetShape.size()) {
+      while (sourceDim < sourceShape.size())
+        currIndices.push_back(sourceDim++);
       if (!reassociationMap.empty() && !currIndices.empty())
         reassociationMap.back().append(currIndices.begin(), currIndices.end());
       // Break out of the loops. We should be done here.
@@ -183,13 +185,13 @@ Optional<SmallVector<ReassociationIndices>> mlir::composeReassociationIndices(
 
 SmallVector<SmallVector<AffineExpr, 2>, 2>
 mlir::convertReassociationIndicesToExprs(
-    OpBuilder &b, ArrayRef<ReassociationIndices> reassociationIndices) {
+    MLIRContext *context, ArrayRef<ReassociationIndices> reassociationIndices) {
   SmallVector<SmallVector<AffineExpr, 2>, 2> reassociationMaps;
   for (const auto &indices : reassociationIndices) {
     SmallVector<AffineExpr, 2> reassociationMap;
     reassociationMap.reserve(indices.size());
     for (int64_t index : indices)
-      reassociationMap.push_back(b.getAffineDimExpr(index));
+      reassociationMap.push_back(mlir::getAffineDimExpr(index, context));
     reassociationMaps.push_back(std::move(reassociationMap));
   }
   return reassociationMaps;
@@ -213,7 +215,7 @@ ArrayAttr mlir::getReassociationIndicesAttribute(
     OpBuilder &b, ArrayRef<ReassociationIndices> reassociation) {
   SmallVector<Attribute, 4> reassociationAttr =
       llvm::to_vector<4>(llvm::map_range(
-          reassociation, [&](ReassociationIndices indices) -> Attribute {
+          reassociation, [&](const ReassociationIndices &indices) -> Attribute {
             return b.getI64ArrayAttr(indices).cast<Attribute>();
           }));
   return b.getArrayAttr(reassociationAttr);
@@ -251,7 +253,7 @@ bool mlir::isReassociationValid(ArrayRef<AffineMap> reassociation,
     return true;
   unsigned nDims = reassociation[0].getNumDims();
   unsigned nextExpectedDim = 0;
-  for (auto it : llvm::enumerate(reassociation)) {
+  for (const auto &it : llvm::enumerate(reassociation)) {
     auto m = it.value();
     if (m.getNumDims() != nDims || m.getNumSymbols() != 0) {
       if (invalidIndex)
@@ -273,4 +275,46 @@ bool mlir::isReassociationValid(ArrayRef<AffineMap> reassociation,
     return false;
   }
   return true;
+}
+
+LogicalResult mlir::reshapeLikeShapesAreCompatible(
+    function_ref<LogicalResult(const Twine &)> emitError,
+    ArrayRef<int64_t> collapsedShape, ArrayRef<int64_t> expandedShape,
+    ArrayRef<ReassociationIndices> reassociationMaps, bool isExpandingReshape) {
+  unsigned expandedDimStart = 0;
+  for (const auto &map : llvm::enumerate(reassociationMaps)) {
+    Optional<int64_t> dynamicShape;
+    int64_t linearizedStaticShape = 1;
+    for (const auto &dim : llvm::enumerate(
+             expandedShape.slice(expandedDimStart, map.value().size()))) {
+      if (ShapedType::isDynamic(dim.value())) {
+        if (isExpandingReshape && dynamicShape) {
+          return emitError("invalid to have a single dimension (" +
+                           Twine(map.index()) +
+                           ") expanded into multiple dynamic dims (" +
+                           Twine(expandedDimStart + dynamicShape.getValue()) +
+                           "," + Twine(expandedDimStart + dim.index()) + ")");
+        }
+        dynamicShape = dim.index();
+      } else {
+        linearizedStaticShape *= dim.value();
+      }
+    }
+    if (dynamicShape) {
+      if (!ShapedType::isDynamic(collapsedShape[map.index()])) {
+        return emitError(
+            "expected dimension " + Twine(map.index()) +
+            " of collapsed type to be dynamic since one or more of the "
+            "corresponding dimensions in the expanded type is dynamic");
+      }
+    } else {
+      if (collapsedShape[map.index()] != linearizedStaticShape) {
+        return emitError("expected dimension " + Twine(map.index()) +
+                         " of collapsed type to be static value of " +
+                         Twine(linearizedStaticShape));
+      }
+    }
+    expandedDimStart += map.value().size();
+  }
+  return success();
 }

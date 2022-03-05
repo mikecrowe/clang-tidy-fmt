@@ -184,26 +184,25 @@ public:
     useAnalyzedObjectsForUnparse_ = flag;
   }
 
-  /// Set the Fortran options to predifined defaults. These defaults are
-  /// consistend with f18/f18.cpp.
+  /// Set the Fortran options to predefined defaults.
   // TODO: We should map frontendOpts_ to parserOpts_ instead. For that, we
   // need to extend frontendOpts_ first. Next, we need to add the corresponding
   // compiler driver options in libclangDriver.
   void SetDefaultFortranOpts();
 
   /// Set the default predefinitions.
-  void setDefaultPredefinitions();
+  void SetDefaultPredefinitions();
 
   /// Collect the macro definitions from preprocessorOpts_ and prepare them for
   /// the parser (i.e. copy into parserOpts_)
-  void collectMacroDefinitions();
+  void CollectMacroDefinitions();
 
   /// Set the Fortran options to user-specified values.
   /// These values are found in the preprocessor options.
-  void setFortranOpts();
+  void SetFortranOpts();
 
   /// Set the Semantic Options
-  void setSemanticsOpts(Fortran::parser::AllCookedSources &);
+  void SetSemanticsOpts(Fortran::parser::AllCookedSources &);
 };
 
 } // end namespace Fortran::frontend

@@ -13,8 +13,10 @@
 
 #include "clang/Tooling/ArgumentsAdjusters.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
@@ -43,12 +45,24 @@ TEST(CommandMangler, Everything) {
   Mangler.ClangPath = testPath("fake/clang");
   Mangler.ResourceDir = testPath("fake/resources");
   Mangler.Sysroot = testPath("fake/sysroot");
-  std::vector<std::string> Cmd = {"clang++", "--", "foo.cc"};
+  std::vector<std::string> Cmd = {"clang++", "--", "foo.cc", "bar.cc"};
   Mangler.adjust(Cmd, "foo.cc");
   EXPECT_THAT(Cmd, ElementsAre(testPath("fake/clang++"),
                                "-resource-dir=" + testPath("fake/resources"),
                                "-isysroot", testPath("fake/sysroot"), "--",
                                "foo.cc"));
+}
+
+TEST(CommandMangler, FilenameMismatch) {
+  auto Mangler = CommandMangler::forTests();
+  Mangler.ClangPath = testPath("clang");
+  // Our compile flags refer to foo.cc...
+  std::vector<std::string> Cmd = {"clang", "foo.cc"};
+  // but we're applying it to foo.h...
+  Mangler.adjust(Cmd, "foo.h");
+  // so transferCompileCommand should add -x c++-header to preserve semantics.
+  EXPECT_THAT(
+      Cmd, ElementsAre(testPath("clang"), "-x", "c++-header", "--", "foo.h"));
 }
 
 TEST(CommandMangler, ResourceDir) {
@@ -93,7 +107,7 @@ TEST(CommandMangler, ClangPath) {
 // Only run the PATH/symlink resolving test on unix, we need to fiddle
 // with permissions and environment variables...
 #ifdef LLVM_ON_UNIX
-MATCHER(Ok, "") {
+MATCHER(ok, "") {
   if (arg) {
     *result_listener << arg.message();
     return false;
@@ -110,20 +124,20 @@ TEST(CommandMangler, ClangPathResolve) {
   //       bar
   llvm::SmallString<256> TempDir;
   ASSERT_THAT(llvm::sys::fs::createUniqueDirectory("ClangPathResolve", TempDir),
-              Ok());
+              ok());
   // /var/tmp is a symlink on Mac. Resolve it so we're asserting the right path.
-  ASSERT_THAT(llvm::sys::fs::real_path(TempDir.str(), TempDir), Ok());
+  ASSERT_THAT(llvm::sys::fs::real_path(TempDir.str(), TempDir), ok());
   auto CleanDir = llvm::make_scope_exit(
       [&] { llvm::sys::fs::remove_directories(TempDir); });
-  ASSERT_THAT(llvm::sys::fs::create_directory(TempDir + "/bin"), Ok());
-  ASSERT_THAT(llvm::sys::fs::create_directory(TempDir + "/lib"), Ok());
+  ASSERT_THAT(llvm::sys::fs::create_directory(TempDir + "/bin"), ok());
+  ASSERT_THAT(llvm::sys::fs::create_directory(TempDir + "/lib"), ok());
   int FD;
-  ASSERT_THAT(llvm::sys::fs::openFileForWrite(TempDir + "/lib/bar", FD), Ok());
-  ASSERT_THAT(llvm::sys::Process::SafelyCloseFileDescriptor(FD), Ok());
+  ASSERT_THAT(llvm::sys::fs::openFileForWrite(TempDir + "/lib/bar", FD), ok());
+  ASSERT_THAT(llvm::sys::Process::SafelyCloseFileDescriptor(FD), ok());
   ::chmod((TempDir + "/lib/bar").str().c_str(), 0755); // executable
   ASSERT_THAT(
       llvm::sys::fs::create_link(TempDir + "/lib/bar", TempDir + "/bin/foo"),
-      Ok());
+      ok());
 
   // Test the case where the driver is an absolute path to a symlink.
   auto Mangler = CommandMangler::forTests();
@@ -376,6 +390,30 @@ TEST(CommandMangler, InputsAfterDashDash) {
         llvm::makeArrayRef(Args).drop_back(2),
         testing::AllOf(Not(Contains("foo.cc")), Not(Contains("bar.cc"))));
   }
+}
+
+TEST(CommandMangler, StripsMultipleArch) {
+  const auto Mangler = CommandMangler::forTests();
+  std::vector<std::string> Args = {"clang", "-arch", "foo",
+                                   "-arch", "bar",   "/Users/foo.cc"};
+  Mangler.adjust(Args, "/Users/foo.cc");
+  EXPECT_EQ(
+      llvm::count_if(Args, [](llvm::StringRef Arg) { return Arg == "-arch"; }),
+      0);
+
+  // Single arch option is preserved.
+  Args = {"clang", "-arch", "foo", "/Users/foo.cc"};
+  Mangler.adjust(Args, "/Users/foo.cc");
+  EXPECT_EQ(
+      llvm::count_if(Args, [](llvm::StringRef Arg) { return Arg == "-arch"; }),
+      1);
+}
+
+TEST(CommandMangler, EmptyArgs) {
+  const auto Mangler = CommandMangler::forTests();
+  std::vector<std::string> Args = {};
+  // Make sure we don't crash.
+  Mangler.adjust(Args, "foo.cc");
 }
 } // namespace
 } // namespace clangd

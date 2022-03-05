@@ -18,7 +18,7 @@ include "mlir/Dialect/SPIRV/IR/SPIRVBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
 
 class SPV_LogicalBinaryOp<string mnemonic, Type operandsType,
-                    list<OpTrait> traits = []> :
+                    list<Trait> traits = []> :
       // Result type is SPV_Bool.
       SPV_BinaryOp<mnemonic, SPV_Bool, operandsType,
                    !listconcat(traits,
@@ -34,7 +34,7 @@ class SPV_LogicalBinaryOp<string mnemonic, Type operandsType,
 }
 
 class SPV_LogicalUnaryOp<string mnemonic, Type operandType,
-                         list<OpTrait> traits = []> :
+                         list<Trait> traits = []> :
       // Result type is SPV_Bool.
       SPV_UnaryOp<mnemonic, SPV_Bool, operandType,
                   !listconcat(traits, [NoSideEffect, SameTypeOperands,
@@ -999,9 +999,6 @@ def SPV_SelectOp : SPV_Op<"Select",
   let results = (outs
     SPV_SelectType:$result
   );
-
-  let builders = [
-    OpBuilder<(ins "Value":$cond, "Value":$trueValue, "Value":$falseValue)>];
 
   let assemblyFormat = [{
     operands attr-dict `:` type($condition) `,` type($result)

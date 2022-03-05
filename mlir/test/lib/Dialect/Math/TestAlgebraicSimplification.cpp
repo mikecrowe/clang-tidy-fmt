@@ -10,10 +10,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "mlir/Dialect/LLVMIR/LLVMDialect.h"
 #include "mlir/Dialect/Math/IR/Math.h"
 #include "mlir/Dialect/Math/Transforms/Passes.h"
-#include "mlir/Dialect/Vector/VectorOps.h"
+#include "mlir/Dialect/Vector/IR/VectorOps.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
 
@@ -21,8 +20,9 @@ using namespace mlir;
 
 namespace {
 struct TestMathAlgebraicSimplificationPass
-    : public PassWrapper<TestMathAlgebraicSimplificationPass, FunctionPass> {
-  void runOnFunction() override;
+    : public PassWrapper<TestMathAlgebraicSimplificationPass,
+                         OperationPass<FuncOp>> {
+  void runOnOperation() override;
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<vector::VectorDialect, math::MathDialect>();
   }
@@ -33,9 +33,9 @@ struct TestMathAlgebraicSimplificationPass
     return "Test math algebraic simplification";
   }
 };
-} // end anonymous namespace
+} // namespace
 
-void TestMathAlgebraicSimplificationPass::runOnFunction() {
+void TestMathAlgebraicSimplificationPass::runOnOperation() {
   RewritePatternSet patterns(&getContext());
   populateMathAlgebraicSimplificationPatterns(patterns);
   (void)applyPatternsAndFoldGreedily(getOperation(), std::move(patterns));

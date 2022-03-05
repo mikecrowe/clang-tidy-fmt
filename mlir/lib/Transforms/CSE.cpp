@@ -15,7 +15,6 @@
 #include "mlir/IR/Dominance.h"
 #include "mlir/Pass/Pass.h"
 #include "mlir/Transforms/Passes.h"
-#include "mlir/Transforms/Utils.h"
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/ScopedHashTable.h"
@@ -28,7 +27,11 @@ using namespace mlir;
 namespace {
 struct SimpleOperationInfo : public llvm::DenseMapInfo<Operation *> {
   static unsigned getHashValue(const Operation *opC) {
-    return OperationEquivalence::computeHash(const_cast<Operation *>(opC));
+    return OperationEquivalence::computeHash(
+        const_cast<Operation *>(opC),
+        /*hashOperands=*/OperationEquivalence::directHashValue,
+        /*hashResults=*/OperationEquivalence::ignoreHashValue,
+        OperationEquivalence::IgnoreLocations);
   }
   static bool isEqual(const Operation *lhsC, const Operation *rhsC) {
     auto *lhs = const_cast<Operation *>(lhsC);
@@ -38,11 +41,14 @@ struct SimpleOperationInfo : public llvm::DenseMapInfo<Operation *> {
     if (lhs == getTombstoneKey() || lhs == getEmptyKey() ||
         rhs == getTombstoneKey() || rhs == getEmptyKey())
       return false;
-    return OperationEquivalence::isEquivalentTo(const_cast<Operation *>(lhsC),
-                                                const_cast<Operation *>(rhsC));
+    return OperationEquivalence::isEquivalentTo(
+        const_cast<Operation *>(lhsC), const_cast<Operation *>(rhsC),
+        /*mapOperands=*/OperationEquivalence::exactValueMatch,
+        /*mapResults=*/OperationEquivalence::ignoreValueEquivalence,
+        OperationEquivalence::IgnoreLocations);
   }
 };
-} // end anonymous namespace
+} // namespace
 
 namespace {
 /// Simple common sub-expression elimination.
@@ -84,7 +90,7 @@ private:
   std::vector<Operation *> opsToErase;
   DominanceInfo *domInfo = nullptr;
 };
-} // end anonymous namespace
+} // namespace
 
 /// Attempt to eliminate a redundant operation.
 LogicalResult CSE::simplifyOperation(ScopedMapTy &knownValues, Operation *op,

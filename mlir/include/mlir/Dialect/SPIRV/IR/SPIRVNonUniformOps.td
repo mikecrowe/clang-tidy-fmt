@@ -15,7 +15,7 @@
 #define MLIR_DIALECT_SPIRV_IR_NON_UNIFORM_OPS
 
 class SPV_GroupNonUniformArithmeticOp<string mnemonic, Type type,
-      list<OpTrait> traits = []> : SPV_Op<mnemonic, traits> {
+      list<Trait> traits = []> : SPV_Op<mnemonic, traits> {
 
   let arguments = (ins
     SPV_ScopeAttr:$execution_scope,
@@ -207,8 +207,6 @@ def SPV_GroupNonUniformElectOp : SPV_Op<"GroupNonUniformElect", []> {
   let results = (outs
     SPV_Bool:$result
   );
-
-  let builders = [OpBuilder<(ins "spirv::Scope")>];
 
   let assemblyFormat = "$execution_scope attr-dict `:` type($result)";
 }

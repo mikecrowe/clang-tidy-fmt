@@ -1,4 +1,12 @@
-// RUN: %clang_cc1 -fsyntax-only -verify -Wreserved-identifier -Wno-visibility %s
+// RUN: %clang_cc1 -isystem %S/Inputs -fsyntax-only -verify -Wreserved-identifier -Wno-visibility %s
+
+#include <reserved-identifier.h>
+
+__I_AM_A_SYSTEM_MACRO() // no-warning
+
+void test_system_macro_expansion() {
+  SOME_SYSTEM_MACRO(); // no-warning
+}
 
 #define __oof foo__ // expected-warning {{macro name is a reserved identifier}}
 
@@ -16,6 +24,8 @@ void foo(unsigned int _Reserved) { // expected-warning {{identifier '_Reserved' 
   goto __reserved;                 // expected-warning {{identifier '__reserved' is reserved because it starts with '__'}}
 __reserved: // expected-warning {{identifier '__reserved' is reserved because it starts with '__'}}
             ;
+  goto _not_reserved;
+_not_reserved: ;
 }
 
 void foot(unsigned int _not_reserved) {} // no-warning
@@ -56,7 +66,7 @@ void func(struct _preserved { int a; } r) {} // expected-warning {{identifier '_
 
 extern char *_strdup(const char *); // expected-warning {{identifier '_strdup' is reserved because it starts with '_' at global scope}}
 
-// Don't warn on redecleration
+// Don't warn on redeclaration
 extern char *_strdup(const char *); // no-warning
 
 void ok() {

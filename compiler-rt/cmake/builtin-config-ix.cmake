@@ -10,6 +10,7 @@ builtin_check_c_compiler_flag(-fPIE                 COMPILER_RT_HAS_FPIE_FLAG)
 builtin_check_c_compiler_flag(-fno-builtin          COMPILER_RT_HAS_FNO_BUILTIN_FLAG)
 builtin_check_c_compiler_flag(-std=c11              COMPILER_RT_HAS_STD_C11_FLAG)
 builtin_check_c_compiler_flag(-fvisibility=hidden   COMPILER_RT_HAS_VISIBILITY_HIDDEN_FLAG)
+builtin_check_c_compiler_flag(-fomit-frame-pointer  COMPILER_RT_HAS_OMIT_FRAME_POINTER_FLAG)
 builtin_check_c_compiler_flag(-ffreestanding        COMPILER_RT_HAS_FREESTANDING_FLAG)
 builtin_check_c_compiler_flag(-fxray-instrument     COMPILER_RT_HAS_XRAY_COMPILER_FLAG)
 
@@ -42,7 +43,7 @@ set(X86 i386)
 set(X86_64 x86_64)
 set(MIPS32 mips mipsel)
 set(MIPS64 mips64 mips64el)
-set(PPC32 powerpc)
+set(PPC32 powerpc powerpcspe)
 set(PPC64 powerpc64 powerpc64le)
 set(RISCV32 riscv32)
 set(RISCV64 riscv64)
@@ -82,7 +83,8 @@ if(APPLE)
     execute_process(COMMAND
         /usr/libexec/PlistBuddy -c "Print :SupportedTargets:${os}:Archs" ${sdk_path}/SDKSettings.plist
       OUTPUT_VARIABLE SDK_SUPPORTED_ARCHS
-      RESULT_VARIABLE PLIST_ERROR)
+      RESULT_VARIABLE PLIST_ERROR
+      ERROR_QUIET)
     if (PLIST_ERROR EQUAL 0 AND
         SDK_SUPPORTED_ARCHS MATCHES " ${arch}\n")
       message(STATUS "Found ${arch} support in ${sdk_path}/SDKSettings.plist")
@@ -113,7 +115,7 @@ if(APPLE)
     set(DARWIN_ios_BUILTIN_MIN_VER_FLAG
       ${DARWIN_ios_MIN_VER_FLAG}=${DARWIN_ios_BUILTIN_MIN_VER})
     set(DARWIN_ios_BUILTIN_ALL_POSSIBLE_ARCHS ${ARM64} ${ARM32})
-    set(DARWIN_iossim_BUILTIN_ALL_POSSIBLE_ARCHS ${X86} ${X86_64})
+    set(DARWIN_iossim_BUILTIN_ALL_POSSIBLE_ARCHS ${X86} ${X86_64} arm64)
   endif()
   if(COMPILER_RT_ENABLE_WATCHOS)
     list(APPEND DARWIN_EMBEDDED_PLATFORMS watchos)
@@ -122,7 +124,7 @@ if(APPLE)
     set(DARWIN_watchos_BUILTIN_MIN_VER_FLAG
       ${DARWIN_watchos_MIN_VER_FLAG}=${DARWIN_watchos_BUILTIN_MIN_VER})
     set(DARWIN_watchos_BUILTIN_ALL_POSSIBLE_ARCHS armv7 armv7k arm64_32)
-    set(DARWIN_watchossim_BUILTIN_ALL_POSSIBLE_ARCHS ${X86})
+    set(DARWIN_watchossim_BUILTIN_ALL_POSSIBLE_ARCHS ${X86} arm64)
   endif()
   if(COMPILER_RT_ENABLE_TVOS)
     list(APPEND DARWIN_EMBEDDED_PLATFORMS tvos)
@@ -131,7 +133,7 @@ if(APPLE)
     set(DARWIN_tvos_BUILTIN_MIN_VER_FLAG
       ${DARWIN_tvos_MIN_VER_FLAG}=${DARWIN_tvos_BUILTIN_MIN_VER})
     set(DARWIN_tvos_BUILTIN_ALL_POSSIBLE_ARCHS armv7 arm64)
-    set(DARWIN_tvossim_BUILTIN_ALL_POSSIBLE_ARCHS ${X86} ${X86_64})
+    set(DARWIN_tvossim_BUILTIN_ALL_POSSIBLE_ARCHS ${X86} ${X86_64} arm64)
   endif()
 
   set(BUILTIN_SUPPORTED_OS osx)

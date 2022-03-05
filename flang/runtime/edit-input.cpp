@@ -1,4 +1,4 @@
-//===-- runtime/edit-input.cpp ----------------------------------*- C++ -*-===//
+//===-- runtime/edit-input.cpp --------------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "edit-input.h"
+#include "namelist.h"
 #include "flang/Common/real.h"
 #include "flang/Common/uint128.h"
 #include <algorithm>
@@ -47,6 +48,10 @@ static bool EditBOZInput(IoStatementState &io, const DataEdit &edit, void *n,
   return true;
 }
 
+static inline char32_t GetDecimalPoint(const DataEdit &edit) {
+  return edit.modes.editingFlags & decimalComma ? char32_t{','} : char32_t{'.'};
+}
+
 // Prepares input from a field, and consumes the sign, if any.
 // Returns true if there's a '-' sign.
 static bool ScanNumericPrefix(IoStatementState &io, const DataEdit &edit,
@@ -56,8 +61,9 @@ static bool ScanNumericPrefix(IoStatementState &io, const DataEdit &edit,
   if (next) {
     negative = *next == '-';
     if (negative || *next == '+') {
+      io.GotChar();
       io.SkipSpaces(remaining);
-      next = io.NextInField(remaining);
+      next = io.NextInField(remaining, GetDecimalPoint(edit));
     }
   }
   return negative;
@@ -68,6 +74,10 @@ bool EditIntegerInput(
   RUNTIME_CHECK(io.GetIoErrorHandler(), kind >= 1 && !(kind & (kind - 1)));
   switch (edit.descriptor) {
   case DataEdit::ListDirected:
+    if (IsNamelistName(io)) {
+      return false;
+    }
+    break;
   case 'G':
   case 'I':
     break;
@@ -77,6 +87,9 @@ bool EditIntegerInput(
     return EditBOZInput(io, edit, n, 8, kind << 3);
   case 'Z':
     return EditBOZInput(io, edit, n, 16, kind << 3);
+  case 'A': // legacy extension
+    return EditDefaultCharacterInput(
+        io, edit, reinterpret_cast<char *>(n), kind);
   default:
     io.GetIoErrorHandler().SignalError(IostatErrorInFormat,
         "Data edit descriptor '%c' may not be used with an INTEGER data item",
@@ -86,7 +99,8 @@ bool EditIntegerInput(
   std::optional<int> remaining;
   std::optional<char32_t> next;
   bool negate{ScanNumericPrefix(io, edit, next, remaining)};
-  common::UnsignedInt128 value;
+  common::UnsignedInt128 value{0};
+  bool any{negate};
   for (; next; next = io.NextInField(remaining)) {
     char32_t ch{*next};
     if (ch == ' ' || ch == '\t') {
@@ -106,12 +120,15 @@ bool EditIntegerInput(
     }
     value *= 10;
     value += digit;
+    any = true;
   }
   if (negate) {
     value = -value;
   }
-  std::memcpy(n, &value, kind);
-  return true;
+  if (any || !io.GetConnectionState().IsAtEOF()) {
+    std::memcpy(n, &value, kind); // a blank field means zero
+  }
+  return any;
 }
 
 // Parses a REAL input number from the input source as a normalized
@@ -136,11 +153,14 @@ static int ScanRealInput(char *buffer, int bufferSize, IoStatementState &io,
   if (ScanNumericPrefix(io, edit, next, remaining)) {
     Put('-');
   }
-  if (!next) { // empty field means zero
-    Put('0');
+  if (next.value_or(' ') == ' ') { // empty/blank field means zero
+    remaining.reset();
+    if (!io.GetConnectionState().IsAtEOF()) {
+      Put('0');
+    }
     return got;
   }
-  char32_t decimal = edit.modes.editingFlags & decimalComma ? ',' : '.';
+  char32_t decimal{GetDecimalPoint(edit)};
   char32_t first{*next >= 'a' && *next <= 'z' ? *next + 'A' - 'a' : *next};
   if (first == 'N' || first == 'I') {
     // NaN or infinity - convert to upper case
@@ -165,7 +185,7 @@ static int ScanRealInput(char *buffer, int bufferSize, IoStatementState &io,
     Put('.'); // input field is normalized to a fraction
     auto start{got};
     bool bzMode{(edit.modes.editingFlags & blankZero) != 0};
-    for (; next; next = io.NextInField(remaining)) {
+    for (; next; next = io.NextInField(remaining, decimal)) {
       char32_t ch{*next};
       if (ch == ' ' || ch == '\t') {
         if (bzMode) {
@@ -256,9 +276,68 @@ static int ScanRealInput(char *buffer, int bufferSize, IoStatementState &io,
   return got;
 }
 
+// If no special modes are in effect and the form of the input value
+// that's present in the input stream is acceptable to the decimal->binary
+// converter without modification, this fast path for real input
+// saves time by avoiding memory copies and reformatting of the exponent.
+template <int PRECISION>
+static bool TryFastPathRealInput(
+    IoStatementState &io, const DataEdit &edit, void *n) {
+  if (edit.modes.editingFlags & (blankZero | decimalComma)) {
+    return false;
+  }
+  if (edit.modes.scale != 0) {
+    return false;
+  }
+  const char *str{nullptr};
+  std::size_t got{io.GetNextInputBytes(str)};
+  if (got == 0 || str == nullptr ||
+      !io.GetConnectionState().recordLength.has_value()) {
+    return false; // could not access reliably-terminated input stream
+  }
+  const char *p{str};
+  std::int64_t maxConsume{
+      std::min<std::int64_t>(got, edit.width.value_or(got))};
+  const char *limit{str + maxConsume};
+  decimal::ConversionToBinaryResult<PRECISION> converted{
+      decimal::ConvertToBinary<PRECISION>(p, edit.modes.round, limit)};
+  if (converted.flags & decimal::Invalid) {
+    return false;
+  }
+  if (edit.digits.value_or(0) != 0 &&
+      std::memchr(str, '.', p - str) == nullptr) {
+    // No explicit decimal point, and edit descriptor is Fw.d (or other)
+    // with d != 0, which implies scaling.
+    return false;
+  }
+  for (; p < limit && (*p == ' ' || *p == '\t'); ++p) {
+  }
+  if (edit.descriptor == DataEdit::ListDirectedImaginaryPart) {
+    // Need to consume a trailing ')' and any white space after
+    if (p >= limit || *p != ')') {
+      return false;
+    }
+    for (++p; p < limit && (*p == ' ' || *p == '\t'); ++p) {
+    }
+  }
+  if (edit.width && p < str + *edit.width) {
+    return false; // unconverted characters remain in fixed width field
+  }
+  // Success on the fast path!
+  // TODO: raise converted.flags as exceptions?
+  *reinterpret_cast<decimal::BinaryFloatingPointNumber<PRECISION> *>(n) =
+      converted.binary;
+  io.HandleRelativePosition(p - str);
+  return true;
+}
+
 template <int KIND>
 bool EditCommonRealInput(IoStatementState &io, const DataEdit &edit, void *n) {
   constexpr int binaryPrecision{common::PrecisionOfRealKind(KIND)};
+  if (TryFastPathRealInput<binaryPrecision>(io, edit, n)) {
+    return true;
+  }
+  // Fast path wasn't available or didn't work; go the more general route
   static constexpr int maxDigits{
       common::MaxDecimalConversionDigits(binaryPrecision)};
   static constexpr int bufferSize{maxDigits + 18};
@@ -275,7 +354,38 @@ bool EditCommonRealInput(IoStatementState &io, const DataEdit &edit, void *n) {
   }
   bool hadExtra{got > maxDigits};
   if (exponent != 0) {
-    got += std::snprintf(&buffer[got], bufferSize - got, "e%d", exponent);
+    buffer[got++] = 'e';
+    if (exponent < 0) {
+      buffer[got++] = '-';
+      exponent = -exponent;
+    }
+    if (exponent > 9999) {
+      exponent = 9999; // will convert to +/-Inf
+    }
+    if (exponent > 999) {
+      int dig{exponent / 1000};
+      buffer[got++] = '0' + dig;
+      int rest{exponent - 1000 * dig};
+      dig = rest / 100;
+      buffer[got++] = '0' + dig;
+      rest -= 100 * dig;
+      dig = rest / 10;
+      buffer[got++] = '0' + dig;
+      buffer[got++] = '0' + (rest - 10 * dig);
+    } else if (exponent > 99) {
+      int dig{exponent / 100};
+      buffer[got++] = '0' + dig;
+      int rest{exponent - 100 * dig};
+      dig = rest / 10;
+      buffer[got++] = '0' + dig;
+      buffer[got++] = '0' + (rest - 10 * dig);
+    } else if (exponent > 9) {
+      int dig{exponent / 10};
+      buffer[got++] = '0' + dig;
+      buffer[got++] = '0' + (exponent - 10 * dig);
+    } else {
+      buffer[got++] = '0' + exponent;
+    }
   }
   buffer[got] = '\0';
   const char *p{buffer};
@@ -296,6 +406,10 @@ bool EditRealInput(IoStatementState &io, const DataEdit &edit, void *n) {
   constexpr int binaryPrecision{common::PrecisionOfRealKind(KIND)};
   switch (edit.descriptor) {
   case DataEdit::ListDirected:
+    if (IsNamelistName(io)) {
+      return false;
+    }
+    return EditCommonRealInput<KIND>(io, edit, n);
   case DataEdit::ListDirectedRealPart:
   case DataEdit::ListDirectedImaginaryPart:
   case 'F':
@@ -312,6 +426,9 @@ bool EditRealInput(IoStatementState &io, const DataEdit &edit, void *n) {
   case 'Z':
     return EditBOZInput(
         io, edit, n, 16, common::BitsForBinaryPrecision(binaryPrecision));
+  case 'A': // legacy extension
+    return EditDefaultCharacterInput(
+        io, edit, reinterpret_cast<char *>(n), KIND);
   default:
     io.GetIoErrorHandler().SignalError(IostatErrorInFormat,
         "Data edit descriptor '%c' may not be used for REAL input",
@@ -324,6 +441,10 @@ bool EditRealInput(IoStatementState &io, const DataEdit &edit, void *n) {
 bool EditLogicalInput(IoStatementState &io, const DataEdit &edit, bool &x) {
   switch (edit.descriptor) {
   case DataEdit::ListDirected:
+    if (IsNamelistName(io)) {
+      return false;
+    }
+    break;
   case 'L':
   case 'G':
     break;
@@ -405,6 +526,9 @@ static bool EditListDirectedDefaultCharacterInput(
     io.HandleRelativePosition(1);
     return EditDelimitedCharacterInput(io, x, length, *ch);
   }
+  if (IsNamelistName(io) || io.GetConnectionState().IsAtEOF()) {
+    return false;
+  }
   // Undelimited list-directed character input: stop at a value separator
   // or the end of the current record.
   std::optional<int> remaining{length};
@@ -441,6 +565,9 @@ bool EditDefaultCharacterInput(
         edit.descriptor);
     return false;
   }
+  if (io.GetConnectionState().IsAtEOF()) {
+    return false;
+  }
   std::optional<int> remaining{length};
   if (edit.width && *edit.width > 0) {
     remaining = *edit.width;
@@ -453,6 +580,7 @@ bool EditDefaultCharacterInput(
        next = io.NextInField(remaining)) {
     if (skip > 0) {
       --skip;
+      io.GotChar(-1);
     } else {
       *x++ = *next;
       --length;

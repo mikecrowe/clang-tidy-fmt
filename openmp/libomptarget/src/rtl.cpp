@@ -40,7 +40,20 @@ static char *ProfileTraceFile = nullptr;
 
 __attribute__((constructor(101))) void init() {
   DP("Init target library!\n");
-  PM = new PluginManager();
+
+  bool UseEventsForAtomicTransfers = true;
+  if (const char *ForceAtomicMap = getenv("LIBOMPTARGET_MAP_FORCE_ATOMIC")) {
+    std::string ForceAtomicMapStr(ForceAtomicMap);
+    if (ForceAtomicMapStr == "false" || ForceAtomicMapStr == "FALSE")
+      UseEventsForAtomicTransfers = false;
+    else if (ForceAtomicMapStr != "true" && ForceAtomicMapStr != "TRUE")
+      fprintf(stderr,
+              "Warning: 'LIBOMPTARGET_MAP_FORCE_ATOMIC' accepts only "
+              "'true'/'TRUE' or 'false'/'FALSE' as options, '%s' ignored\n",
+              ForceAtomicMap);
+  }
+
+  PM = new PluginManager(UseEventsForAtomicTransfers);
 
 #ifdef OMPTARGET_PROFILE_ENABLED
   ProfileTraceFile = getenv("LIBOMPTARGET_PROFILE");
@@ -179,6 +192,20 @@ void RTLsTy::LoadRTLs() {
         dlsym(dynlib_handle, "__tgt_rtl_set_info_flag");
     *((void **)&R.print_device_info) =
         dlsym(dynlib_handle, "__tgt_rtl_print_device_info");
+    *((void **)&R.create_event) =
+        dlsym(dynlib_handle, "__tgt_rtl_create_event");
+    *((void **)&R.record_event) =
+        dlsym(dynlib_handle, "__tgt_rtl_record_event");
+    *((void **)&R.wait_event) = dlsym(dynlib_handle, "__tgt_rtl_wait_event");
+    *((void **)&R.sync_event) = dlsym(dynlib_handle, "__tgt_rtl_sync_event");
+    *((void **)&R.destroy_event) =
+        dlsym(dynlib_handle, "__tgt_rtl_destroy_event");
+    *((void **)&R.release_async_info) =
+        dlsym(dynlib_handle, "__tgt_rtl_release_async_info");
+    *((void **)&R.init_async_info) =
+        dlsym(dynlib_handle, "__tgt_rtl_init_async_info");
+    *((void **)&R.init_device_info) =
+        dlsym(dynlib_handle, "__tgt_rtl_init_device_info");
   }
 
   DP("RTLs loaded!\n");
@@ -224,7 +251,7 @@ static void RegisterGlobalCtorsDtorsForImage(__tgt_bin_desc *desc,
                                              RTLInfoTy *RTL) {
 
   for (int32_t i = 0; i < RTL->NumberOfDevices; ++i) {
-    DeviceTy &Device = PM->Devices[RTL->Idx + i];
+    DeviceTy &Device = *PM->Devices[RTL->Idx + i];
     Device.PendingGlobalsMtx.lock();
     Device.HasPendingGlobals = true;
     for (__tgt_offload_entry *entry = img->EntriesBegin;
@@ -294,14 +321,14 @@ void RTLsTy::initRTLonce(RTLInfoTy &R) {
   // If this RTL is not already in use, initialize it.
   if (!R.isUsed && R.NumberOfDevices != 0) {
     // Initialize the device information for the RTL we are about to use.
-    DeviceTy device(&R);
-    size_t Start = PM->Devices.size();
-    PM->Devices.resize(Start + R.NumberOfDevices, device);
+    const size_t Start = PM->Devices.size();
+    PM->Devices.reserve(Start + R.NumberOfDevices);
     for (int32_t device_id = 0; device_id < R.NumberOfDevices; device_id++) {
+      PM->Devices.push_back(std::make_unique<DeviceTy>(&R));
       // global device ID
-      PM->Devices[Start + device_id].DeviceID = Start + device_id;
+      PM->Devices[Start + device_id]->DeviceID = Start + device_id;
       // RTL local device ID
-      PM->Devices[Start + device_id].RTLDeviceID = device_id;
+      PM->Devices[Start + device_id]->RTLDeviceID = device_id;
     }
 
     // Initialize the index of this RTL and save it in the used RTLs.
@@ -412,7 +439,7 @@ void RTLsTy::UnregisterLib(__tgt_bin_desc *desc) {
       // Execute dtors for static objects if the device has been used, i.e.
       // if its PendingCtors list has been emptied.
       for (int32_t i = 0; i < FoundRTL->NumberOfDevices; ++i) {
-        DeviceTy &Device = PM->Devices[FoundRTL->Idx + i];
+        DeviceTy &Device = *PM->Devices[FoundRTL->Idx + i];
         Device.PendingGlobalsMtx.lock();
         if (Device.PendingCtorsDtors[desc].PendingCtors.empty()) {
           AsyncInfoTy AsyncInfo(Device);

@@ -18,8 +18,8 @@
 #include "io-error.h"
 #include "io-stmt.h"
 #include "lock.h"
-#include "memory.h"
 #include "terminator.h"
+#include "flang/Runtime/memory.h"
 #include <cstdlib>
 #include <cstring>
 #include <optional>
@@ -35,6 +35,8 @@ class ExternalFileUnit : public ConnectionState,
                          public FileFrame<ExternalFileUnit> {
 public:
   explicit ExternalFileUnit(int unitNumber) : unitNumber_{unitNumber} {}
+  ~ExternalFileUnit() {}
+
   int unitNumber() const { return unitNumber_; }
   bool swapEndianness() const { return swapEndianness_; }
   bool createdForInternalChildIo() const { return createdForInternalChildIo_; }
@@ -48,7 +50,7 @@ public:
   static ExternalFileUnit *LookUp(const char *path);
   static ExternalFileUnit &CreateNew(int unit, const Terminator &);
   static ExternalFileUnit *LookUpForClose(int unit);
-  static ExternalFileUnit &NewUnit(const Terminator &, bool forChildIo = false);
+  static ExternalFileUnit &NewUnit(const Terminator &, bool forChildIo);
   static void CloseAll(IoErrorHandler &);
   static void FlushAll(IoErrorHandler &);
 
@@ -76,6 +78,7 @@ public:
   bool Emit(
       const char *, std::size_t, std::size_t elementBytes, IoErrorHandler &);
   bool Receive(char *, std::size_t, std::size_t elementBytes, IoErrorHandler &);
+  std::size_t GetNextInputBytes(const char *&, IoErrorHandler &);
   std::optional<char32_t> GetCurrentChar(IoErrorHandler &);
   void SetLeftTabLimit();
   bool BeginReadingRecord(IoErrorHandler &);
@@ -180,7 +183,7 @@ private:
       ChildListIoStatementState<Direction::Output>,
       ChildListIoStatementState<Direction::Input>,
       ChildUnformattedIoStatementState<Direction::Output>,
-      ChildUnformattedIoStatementState<Direction::Input>>
+      ChildUnformattedIoStatementState<Direction::Input>, InquireUnitState>
       u_;
   std::optional<IoStatementState> io_;
 };

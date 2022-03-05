@@ -10,13 +10,19 @@
 #
 ##===----------------------------------------------------------------------===##
 
-set(LIBOMPTARGET_BUILD_AMDGCN_BCLIB TRUE CACHE BOOL
-  "Can be set to false to disable building this library.")
+set(LIBOMPTARGET_BUILD_AMDGCN_BCLIB FALSE CACHE BOOL
+  "Can be set to true to enable building this library.")
 
 if (NOT LIBOMPTARGET_BUILD_AMDGCN_BCLIB)
   libomptarget_say("Not building AMDGCN device RTL: Disabled by LIBOMPTARGET_BUILD_AMDGCN_BCLIB")
   return()
 endif()
+
+if (NOT LIBOMPTARGET_LLVM_INCLUDE_DIRS)
+  libomptarget_say("Not building AMDGCN device RTL: Missing definition for LIBOMPTARGET_LLVM_INCLUDE_DIRS")
+  return()
+endif()
+
 
 # Copied from nvptx CMakeLists
 if(CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "x86_64")
@@ -33,16 +39,23 @@ endif()
 if (LLVM_DIR)
   # Builds that use pre-installed LLVM have LLVM_DIR set.
   find_program(CLANG_TOOL clang PATHS ${LLVM_TOOLS_BINARY_DIR} NO_DEFAULT_PATH)
-  find_program(LINK_TOOL llvm-link PATHS ${LLVM_TOOLS_BINARY_DIR}
-    NO_DEFAULT_PATH)
+  find_program(LINK_TOOL llvm-link PATHS ${LLVM_TOOLS_BINARY_DIR} NO_DEFAULT_PATH)
   find_program(OPT_TOOL opt PATHS ${LLVM_TOOLS_BINARY_DIR} NO_DEFAULT_PATH)
-  libomptarget_say("Building AMDGCN device RTL. Using clang: ${CLANG_TOOL}")
-else()
+  if ((NOT CLANG_TOOL) OR (NOT LINK_TOOL) OR (NOT OPT_TOOL))
+    libomptarget_say("Not building AMDGCN device RTL. Missing clang: ${CLANG_TOOL}, llvm-link: ${LINK_TOOL} or opt: ${OPT_TOOL}")
+    return()
+  else()
+    libomptarget_say("Building AMDGCN device RTL. Using clang: ${CLANG_TOOL}, llvm-link: ${LINK_TOOL} and opt: ${OPT_TOOL}")
+  endif()
+elseif (LLVM_TOOL_CLANG_BUILD AND NOT CMAKE_CROSSCOMPILING AND NOT OPENMP_STANDALONE_BUILD)
   # LLVM in-tree builds may use CMake target names to discover the tools.
   set(CLANG_TOOL $<TARGET_FILE:clang>)
   set(LINK_TOOL $<TARGET_FILE:llvm-link>)
   set(OPT_TOOL $<TARGET_FILE:opt>)
   libomptarget_say("Building AMDGCN device RTL. Using clang from in-tree build")
+else()
+  libomptarget_say("Not building AMDGCN device RTL. No appropriate clang found")
+  return()
 endif()
 
 project(omptarget-amdgcn)
@@ -83,7 +96,6 @@ set(h_files
   ${CMAKE_CURRENT_SOURCE_DIR}/src/amdgcn_interface.h
   ${CMAKE_CURRENT_SOURCE_DIR}/src/target_impl.h
   ${devicertl_base_directory}/common/debug.h
-  ${devicertl_base_directory}/common/device_environment.h
   ${devicertl_base_directory}/common/omptarget.h
   ${devicertl_base_directory}/common/omptargeti.h
   ${devicertl_base_directory}/common/state-queue.h
@@ -97,11 +109,15 @@ else()
   set(OUTPUTDIR ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
 endif()
 
-# create libraries
-set(mcpus gfx700 gfx701 gfx801 gfx803 gfx900 gfx902 gfx906 gfx908)
+# create gfx bitcode libraries
+set(mcpus gfx700 gfx701 gfx801 gfx803 gfx900 gfx902 gfx906 gfx908 gfx90a gfx1010 gfx1030 gfx1031)
 if (DEFINED LIBOMPTARGET_AMDGCN_GFXLIST)
   set(mcpus ${LIBOMPTARGET_AMDGCN_GFXLIST})
 endif()
+
+# Prepend -I to each list element
+set (LIBOMPTARGET_LLVM_INCLUDE_DIRS_AMDGCN "${LIBOMPTARGET_LLVM_INCLUDE_DIRS}")
+list(TRANSFORM LIBOMPTARGET_LLVM_INCLUDE_DIRS_AMDGCN PREPEND "-I")
 
 macro(add_cuda_bc_library)
   set(cu_cmd ${CLANG_TOOL}
@@ -116,14 +132,16 @@ macro(add_cuda_bc_library)
     -fopenmp -fopenmp-cuda-mode -Xclang -fopenmp-is-device
     -D__AMDGCN__
     -Xclang -target-cpu -Xclang ${mcpu}
-    -fvisibility=default
+    -fvisibility=hidden
     -Wno-unused-value
     -nogpulib
     -O${optimization_level}
     ${CUDA_DEBUG}
     -I${CMAKE_CURRENT_SOURCE_DIR}/src
     -I${devicertl_base_directory}/common/include
-    -I${devicertl_base_directory})
+    -I${devicertl_base_directory}
+    -I${devicertl_base_directory}/../include
+    ${LIBOMPTARGET_LLVM_INCLUDE_DIRS_AMDGCN})
 
   set(bc1_files)
 
