@@ -28,6 +28,9 @@ set(LIBCXXABI_LIBCXX_PATH "${CMAKE_CURRENT_LIST_DIR}/../libcxx" CACHE PATH
         "Specify path to libc++ source.")
 
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR LIBCXXABI_STANDALONE_BUILD)
+  message(WARNING "The Standalone build is deprecated in this release. Please use one of the ways "
+                  "described at https://libcxx.llvm.org/BuildingLibcxx.html for building libc++abi.")
+
   project(libcxxabi CXX C)
 
   set(PACKAGE_NAME libcxxabi)
@@ -118,6 +121,16 @@ option(LIBCXXABI_INCLUDE_TESTS "Generate build targets for the libc++abi unit te
 set(LIBCXXABI_LIBDIR_SUFFIX "${LLVM_LIBDIR_SUFFIX}" CACHE STRING
     "Define suffix of library directory name (32/64)")
 option(LIBCXXABI_INSTALL_LIBRARY "Install the libc++abi library." ON)
+
+if(NOT CMAKE_SYSROOT AND LIBCXXABI_SYSROOT)
+  message(WARNING "LIBCXXABI_SYSROOT is deprecated, please use CMAKE_SYSROOT instead")
+endif()
+if(NOT CMAKE_CXX_COMPILER_TARGET AND LIBCXXABI_TARGET_TRIPLE)
+  message(WARNING "LIBCXXABI_TARGET_TRIPLE is deprecated, please use CMAKE_CXX_COMPILER_TARGET instead")
+endif()
+if(NOT CMAKE_CXX_COMPILER_EXTERNAL_TOOLCHAIN AND LIBCXXABI_GCC_TOOLCHAIN)
+  message(WARNING "LIBCXXABI_GCC_TOOLCHAIN is deprecated, please use CMAKE_CXX_COMPILER_EXTERNAL_TOOLCHAIN instead")
+endif()
 
 if(CMAKE_CXX_COMPILER_TARGET)
   set(LIBCXXABI_DEFAULT_TARGET_TRIPLE "${CMAKE_CXX_COMPILER_TARGET}")

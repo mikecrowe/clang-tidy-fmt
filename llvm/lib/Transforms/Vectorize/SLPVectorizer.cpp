@@ -471,36 +471,17 @@ static bool isValidForAlternation(unsigned Opcode) {
   return true;
 }
 
-static InstructionsState getSameOpcode(ArrayRef<Value *> VL,
-                                       unsigned BaseIndex = 0);
-
-/// Checks if the provided operands of 2 cmp instructions are compatible, i.e.
-/// compatible instructions or constants, or just some other regular values.
-static bool areCompatibleCmpOps(Value *BaseOp0, Value *BaseOp1, Value *Op0,
-                                Value *Op1) {
-  return (isConstant(BaseOp0) && isConstant(Op0)) ||
-         (isConstant(BaseOp1) && isConstant(Op1)) ||
-         (!isa<Instruction>(BaseOp0) && !isa<Instruction>(Op0) &&
-          !isa<Instruction>(BaseOp1) && !isa<Instruction>(Op1)) ||
-         getSameOpcode({BaseOp0, Op0}).getOpcode() ||
-         getSameOpcode({BaseOp1, Op1}).getOpcode();
-}
-
 /// \returns analysis of the Instructions in \p VL described in
 /// InstructionsState, the Opcode that we suppose the whole list
 /// could be vectorized even if its structure is diverse.
 static InstructionsState getSameOpcode(ArrayRef<Value *> VL,
-                                       unsigned BaseIndex) {
+                                       unsigned BaseIndex = 0) {
   // Make sure these are all Instructions.
   if (llvm::any_of(VL, [](Value *V) { return !isa<Instruction>(V); }))
     return InstructionsState(VL[BaseIndex], nullptr, nullptr);
 
   bool IsCastOp = isa<CastInst>(VL[BaseIndex]);
   bool IsBinOp = isa<BinaryOperator>(VL[BaseIndex]);
-  bool IsCmpOp = isa<CmpInst>(VL[BaseIndex]);
-  CmpInst::Predicate BasePred =
-      IsCmpOp ? cast<CmpInst>(VL[BaseIndex])->getPredicate()
-              : CmpInst::BAD_ICMP_PREDICATE;
   unsigned Opcode = cast<Instruction>(VL[BaseIndex])->getOpcode();
   unsigned AltOpcode = Opcode;
   unsigned AltIndex = BaseIndex;
@@ -532,57 +513,6 @@ static InstructionsState getSameOpcode(ArrayRef<Value *> VL,
           AltIndex = Cnt;
           continue;
         }
-      }
-    } else if (IsCmpOp && isa<CmpInst>(VL[Cnt])) {
-      auto *BaseInst = cast<Instruction>(VL[BaseIndex]);
-      auto *Inst = cast<Instruction>(VL[Cnt]);
-      Type *Ty0 = BaseInst->getOperand(0)->getType();
-      Type *Ty1 = Inst->getOperand(0)->getType();
-      if (Ty0 == Ty1) {
-        Value *BaseOp0 = BaseInst->getOperand(0);
-        Value *BaseOp1 = BaseInst->getOperand(1);
-        Value *Op0 = Inst->getOperand(0);
-        Value *Op1 = Inst->getOperand(1);
-        CmpInst::Predicate CurrentPred =
-            cast<CmpInst>(VL[Cnt])->getPredicate();
-        CmpInst::Predicate SwappedCurrentPred =
-            CmpInst::getSwappedPredicate(CurrentPred);
-        // Check for compatible operands. If the corresponding operands are not
-        // compatible - need to perform alternate vectorization.
-        if (InstOpcode == Opcode) {
-          if (BasePred == CurrentPred &&
-              areCompatibleCmpOps(BaseOp0, BaseOp1, Op0, Op1))
-            continue;
-          if (BasePred == SwappedCurrentPred &&
-              areCompatibleCmpOps(BaseOp0, BaseOp1, Op1, Op0))
-            continue;
-          if (E == 2 &&
-              (BasePred == CurrentPred || BasePred == SwappedCurrentPred))
-            continue;
-          auto *AltInst = cast<CmpInst>(VL[AltIndex]);
-          CmpInst::Predicate AltPred = AltInst->getPredicate();
-          Value *AltOp0 = AltInst->getOperand(0);
-          Value *AltOp1 = AltInst->getOperand(1);
-          // Check if operands are compatible with alternate operands.
-          if (AltPred == CurrentPred &&
-              areCompatibleCmpOps(AltOp0, AltOp1, Op0, Op1))
-            continue;
-          if (AltPred == SwappedCurrentPred &&
-              areCompatibleCmpOps(AltOp0, AltOp1, Op1, Op0))
-            continue;
-        }
-        if (BaseIndex == AltIndex) {
-          assert(isValidForAlternation(Opcode) &&
-                 isValidForAlternation(InstOpcode) &&
-                 "Cast isn't safe for alternation, logic needs to be updated!");
-          AltIndex = Cnt;
-          continue;
-        }
-        auto *AltInst = cast<CmpInst>(VL[AltIndex]);
-        CmpInst::Predicate AltPred = AltInst->getPredicate();
-        if (BasePred == CurrentPred || BasePred == SwappedCurrentPred ||
-            AltPred == CurrentPred || AltPred == SwappedCurrentPred)
-          continue;
       }
     } else if (InstOpcode == Opcode || InstOpcode == AltOpcode)
       continue;
@@ -736,19 +666,18 @@ static void inversePermutation(ArrayRef<unsigned> Indices,
 
 /// \returns inserting index of InsertElement or InsertValue instruction,
 /// using Offset as base offset for index.
-static Optional<int> getInsertIndex(Value *InsertInst, unsigned Offset) {
+static Optional<unsigned> getInsertIndex(Value *InsertInst,
+                                         unsigned Offset = 0) {
   int Index = Offset;
   if (auto *IE = dyn_cast<InsertElementInst>(InsertInst)) {
     if (auto *CI = dyn_cast<ConstantInt>(IE->getOperand(2))) {
       auto *VT = cast<FixedVectorType>(IE->getType());
       if (CI->getValue().uge(VT->getNumElements()))
-        return UndefMaskElem;
+        return None;
       Index *= VT->getNumElements();
       Index += CI->getZExtValue();
       return Index;
     }
-    if (isa<UndefValue>(IE->getOperand(2)))
-      return UndefMaskElem;
     return None;
   }
 
@@ -3918,13 +3847,9 @@ void BoUpSLP::buildTree_rec(ArrayRef<Value *> VL, unsigned Depth,
       // Check that we have a buildvector and not a shuffle of 2 or more
       // different vectors.
       ValueSet SourceVectors;
-      int MinIdx = std::numeric_limits<int>::max();
       for (Value *V : VL) {
         SourceVectors.insert(cast<Instruction>(V)->getOperand(0));
-        Optional<int> Idx = *getInsertIndex(V, 0);
-        if (!Idx || *Idx == UndefMaskElem)
-          continue;
-        MinIdx = std::min(MinIdx, *Idx);
+        assert(getInsertIndex(V) != None && "Non-constant or undef index?");
       }
 
       if (count_if(VL, [&SourceVectors](Value *V) {
@@ -3946,10 +3871,8 @@ void BoUpSLP::buildTree_rec(ArrayRef<Value *> VL, unsigned Depth,
                     decltype(OrdCompare)>
           Indices(OrdCompare);
       for (int I = 0, E = VL.size(); I < E; ++I) {
-        Optional<int> Idx = *getInsertIndex(VL[I], 0);
-        if (!Idx || *Idx == UndefMaskElem)
-          continue;
-        Indices.emplace(*Idx, I);
+        unsigned Idx = *getInsertIndex(VL[I]);
+        Indices.emplace(Idx, I);
       }
       OrdersType CurrentOrder(VL.size(), VL.size());
       bool IsIdentity = true;
@@ -4424,41 +4347,9 @@ void BoUpSLP::buildTree_rec(ArrayRef<Value *> VL, unsigned Depth,
       LLVM_DEBUG(dbgs() << "SLP: added a ShuffleVector op.\n");
 
       // Reorder operands if reordering would enable vectorization.
-      auto *CI = dyn_cast<CmpInst>(VL0);
-      if (isa<BinaryOperator>(VL0) || CI) {
+      if (isa<BinaryOperator>(VL0)) {
         ValueList Left, Right;
-        if (!CI || all_of(VL, [](Value *V) {
-              return cast<CmpInst>(V)->isCommutative();
-            })) {
-          reorderInputsAccordingToOpcode(VL, Left, Right, *DL, *SE, *this);
-        } else {
-          CmpInst::Predicate P0 = CI->getPredicate();
-          CmpInst::Predicate AltP0 = cast<CmpInst>(S.AltOp)->getPredicate();
-          CmpInst::Predicate AltP0Swapped = CmpInst::getSwappedPredicate(AltP0);
-          Value *BaseOp0 = VL0->getOperand(0);
-          Value *BaseOp1 = VL0->getOperand(1);
-          // Collect operands - commute if it uses the swapped predicate or
-          // alternate operation.
-          for (Value *V : VL) {
-            auto *Cmp = cast<CmpInst>(V);
-            Value *LHS = Cmp->getOperand(0);
-            Value *RHS = Cmp->getOperand(1);
-            CmpInst::Predicate CurrentPred = CI->getPredicate();
-            CmpInst::Predicate CurrentPredSwapped =
-                CmpInst::getSwappedPredicate(CurrentPred);
-            if (P0 == AltP0 || P0 == AltP0Swapped) {
-              if ((P0 == CurrentPred &&
-                   !areCompatibleCmpOps(BaseOp0, BaseOp1, LHS, RHS)) ||
-                  (P0 == CurrentPredSwapped &&
-                   !areCompatibleCmpOps(BaseOp0, BaseOp1, RHS, LHS)))
-                std::swap(LHS, RHS);
-            } else if (!areCompatibleCmpOps(BaseOp0, BaseOp1, LHS, RHS)) {
-              std::swap(LHS, RHS);
-            }
-            Left.push_back(LHS);
-            Right.push_back(RHS);
-          }
-        }
+        reorderInputsAccordingToOpcode(VL, Left, Right, *DL, *SE, *this);
         TE->setOperand(0, Left);
         TE->setOperand(1, Right);
         buildTree_rec(Left, Depth + 1, {TE, 0});
@@ -5108,12 +4999,10 @@ InstructionCost BoUpSLP::getEntryCost(const TreeEntry *E,
       SmallVector<int> PrevMask(NumElts, UndefMaskElem);
       Mask.swap(PrevMask);
       for (unsigned I = 0; I < NumScalars; ++I) {
-        Optional<int> InsertIdx = getInsertIndex(VL[PrevMask[I]], 0);
-        if (!InsertIdx || *InsertIdx == UndefMaskElem)
-          continue;
-        DemandedElts.setBit(*InsertIdx);
-        IsIdentity &= *InsertIdx - Offset == I;
-        Mask[*InsertIdx - Offset] = I;
+        unsigned InsertIdx = *getInsertIndex(VL[PrevMask[I]]);
+        DemandedElts.setBit(InsertIdx);
+        IsIdentity &= InsertIdx - Offset == I;
+        Mask[InsertIdx - Offset] = I;
       }
       assert(Offset < NumElts && "Failed to find vector index offset");
 
@@ -5390,8 +5279,7 @@ InstructionCost BoUpSLP::getEntryCost(const TreeEntry *E,
              ((Instruction::isBinaryOp(E->getOpcode()) &&
                Instruction::isBinaryOp(E->getAltOpcode())) ||
               (Instruction::isCast(E->getOpcode()) &&
-               Instruction::isCast(E->getAltOpcode())) ||
-              (isa<CmpInst>(VL0) && isa<CmpInst>(E->getAltOp()))) &&
+               Instruction::isCast(E->getAltOpcode()))) &&
              "Invalid Shuffle Vector Operand");
       InstructionCost ScalarCost = 0;
       if (NeedToShuffleReuses) {
@@ -5439,14 +5327,6 @@ InstructionCost BoUpSLP::getEntryCost(const TreeEntry *E,
         VecCost = TTI->getArithmeticInstrCost(E->getOpcode(), VecTy, CostKind);
         VecCost += TTI->getArithmeticInstrCost(E->getAltOpcode(), VecTy,
                                                CostKind);
-      } else if (auto *CI0 = dyn_cast<CmpInst>(VL0)) {
-        VecCost = TTI->getCmpSelInstrCost(E->getOpcode(), ScalarTy,
-                                          Builder.getInt1Ty(),
-                                          CI0->getPredicate(), CostKind, VL0);
-        VecCost += TTI->getCmpSelInstrCost(
-            E->getOpcode(), ScalarTy, Builder.getInt1Ty(),
-            cast<CmpInst>(E->getAltOp())->getPredicate(), CostKind,
-            E->getAltOp());
       } else {
         Type *Src0SclTy = E->getMainOp()->getOperand(0)->getType();
         Type *Src1SclTy = E->getAltOp()->getOperand(0)->getType();
@@ -5463,29 +5343,6 @@ InstructionCost BoUpSLP::getEntryCost(const TreeEntry *E,
           E->Scalars, E->ReorderIndices, E->ReuseShuffleIndices,
           [E](Instruction *I) {
             assert(E->isOpcodeOrAlt(I) && "Unexpected main/alternate opcode");
-            if (auto *CI0 = dyn_cast<CmpInst>(E->getMainOp())) {
-              auto *AltCI0 = cast<CmpInst>(E->getAltOp());
-              auto *CI = cast<CmpInst>(I);
-              CmpInst::Predicate P0 = CI0->getPredicate();
-              CmpInst::Predicate AltP0 = AltCI0->getPredicate();
-              CmpInst::Predicate AltP0Swapped =
-                  CmpInst::getSwappedPredicate(AltP0);
-              CmpInst::Predicate CurrentPred = CI->getPredicate();
-              CmpInst::Predicate CurrentPredSwapped =
-                  CmpInst::getSwappedPredicate(CurrentPred);
-              if (P0 == AltP0 || P0 == AltP0Swapped) {
-                // Alternate cmps have same/swapped predicate as main cmps but
-                // different order of compatible operands.
-                return !(
-                    (P0 == CurrentPred &&
-                     areCompatibleCmpOps(CI0->getOperand(0), CI0->getOperand(1),
-                                         I->getOperand(0), I->getOperand(1))) ||
-                    (P0 == CurrentPredSwapped &&
-                     areCompatibleCmpOps(CI0->getOperand(0), CI0->getOperand(1),
-                                         I->getOperand(1), I->getOperand(0))));
-              }
-              return CurrentPred != P0 && CurrentPredSwapped != P0;
-            }
             return I->getOpcode() == E->getAltOpcode();
           },
           Mask);
@@ -5819,42 +5676,41 @@ InstructionCost BoUpSLP::getTreeCost(ArrayRef<Value *> VectorizedVals) {
     // to detect it as a final shuffled/identity match.
     if (auto *VU = dyn_cast_or_null<InsertElementInst>(EU.User)) {
       if (auto *FTy = dyn_cast<FixedVectorType>(VU->getType())) {
-        Optional<int> InsertIdx = getInsertIndex(VU, 0);
-        if (!InsertIdx || *InsertIdx == UndefMaskElem)
-          continue;
-        auto *It = find_if(FirstUsers, [VU](Value *V) {
-          return areTwoInsertFromSameBuildVector(VU,
-                                                 cast<InsertElementInst>(V));
-        });
-        int VecId = -1;
-        if (It == FirstUsers.end()) {
-          VF.push_back(FTy->getNumElements());
-          ShuffleMask.emplace_back(VF.back(), UndefMaskElem);
-          // Find the insertvector, vectorized in tree, if any.
-          Value *Base = VU;
-          while (isa<InsertElementInst>(Base)) {
-            // Build the mask for the vectorized insertelement instructions.
-            if (const TreeEntry *E = getTreeEntry(Base)) {
-              VU = cast<InsertElementInst>(Base);
-              do {
-                int Idx = E->findLaneForValue(Base);
-                ShuffleMask.back()[Idx] = Idx;
-                Base = cast<InsertElementInst>(Base)->getOperand(0);
-              } while (E == getTreeEntry(Base));
-              break;
+        Optional<unsigned> InsertIdx = getInsertIndex(VU);
+        if (InsertIdx) {
+          auto *It = find_if(FirstUsers, [VU](Value *V) {
+            return areTwoInsertFromSameBuildVector(VU,
+                                                   cast<InsertElementInst>(V));
+          });
+          int VecId = -1;
+          if (It == FirstUsers.end()) {
+            VF.push_back(FTy->getNumElements());
+            ShuffleMask.emplace_back(VF.back(), UndefMaskElem);
+            // Find the insertvector, vectorized in tree, if any.
+            Value *Base = VU;
+            while (isa<InsertElementInst>(Base)) {
+              // Build the mask for the vectorized insertelement instructions.
+              if (const TreeEntry *E = getTreeEntry(Base)) {
+                VU = cast<InsertElementInst>(Base);
+                do {
+                  int Idx = E->findLaneForValue(Base);
+                  ShuffleMask.back()[Idx] = Idx;
+                  Base = cast<InsertElementInst>(Base)->getOperand(0);
+                } while (E == getTreeEntry(Base));
+                break;
+              }
+              Base = cast<InsertElementInst>(Base)->getOperand(0);
             }
-            Base = cast<InsertElementInst>(Base)->getOperand(0);
+            FirstUsers.push_back(VU);
+            DemandedElts.push_back(APInt::getZero(VF.back()));
+            VecId = FirstUsers.size() - 1;
+          } else {
+            VecId = std::distance(FirstUsers.begin(), It);
           }
-          FirstUsers.push_back(VU);
-          DemandedElts.push_back(APInt::getZero(VF.back()));
-          VecId = FirstUsers.size() - 1;
-        } else {
-          VecId = std::distance(FirstUsers.begin(), It);
+          ShuffleMask[VecId][*InsertIdx] = EU.Lane;
+          DemandedElts[VecId].setBit(*InsertIdx);
+          continue;
         }
-        int Idx = *InsertIdx;
-        ShuffleMask[VecId][Idx] = EU.Lane;
-        DemandedElts[VecId].setBit(Idx);
-        continue;
       }
     }
 
@@ -6611,11 +6467,9 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
       Mask.swap(PrevMask);
       for (unsigned I = 0; I < NumScalars; ++I) {
         Value *Scalar = E->Scalars[PrevMask[I]];
-        Optional<int> InsertIdx = getInsertIndex(Scalar, 0);
-        if (!InsertIdx || *InsertIdx == UndefMaskElem)
-          continue;
-        IsIdentity &= *InsertIdx - Offset == I;
-        Mask[*InsertIdx - Offset] = I;
+        unsigned InsertIdx = *getInsertIndex(Scalar);
+        IsIdentity &= InsertIdx - Offset == I;
+        Mask[InsertIdx - Offset] = I;
       }
       if (!IsIdentity || NumElts != NumScalars) {
         V = Builder.CreateShuffleVector(V, Mask);
@@ -6968,12 +6822,11 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
              ((Instruction::isBinaryOp(E->getOpcode()) &&
                Instruction::isBinaryOp(E->getAltOpcode())) ||
               (Instruction::isCast(E->getOpcode()) &&
-               Instruction::isCast(E->getAltOpcode())) ||
-              (isa<CmpInst>(VL0) && isa<CmpInst>(E->getAltOp()))) &&
+               Instruction::isCast(E->getAltOpcode()))) &&
              "Invalid Shuffle Vector Operand");
 
       Value *LHS = nullptr, *RHS = nullptr;
-      if (Instruction::isBinaryOp(E->getOpcode()) || isa<CmpInst>(VL0)) {
+      if (Instruction::isBinaryOp(E->getOpcode())) {
         setInsertPointAfterBundle(E);
         LHS = vectorizeTree(E->getOperand(0));
         RHS = vectorizeTree(E->getOperand(1));
@@ -6993,15 +6846,6 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
             static_cast<Instruction::BinaryOps>(E->getOpcode()), LHS, RHS);
         V1 = Builder.CreateBinOp(
             static_cast<Instruction::BinaryOps>(E->getAltOpcode()), LHS, RHS);
-      } else if (auto *CI0 = dyn_cast<CmpInst>(VL0)) {
-        V0 = Builder.CreateCmp(CI0->getPredicate(), LHS, RHS);
-        auto *AltCI = cast<CmpInst>(E->getAltOp());
-        CmpInst::Predicate AltPred = AltCI->getPredicate();
-        unsigned AltIdx =
-            std::distance(E->Scalars.begin(), find(E->Scalars, AltCI));
-        if (AltCI->getOperand(0) != E->getOperand(0)[AltIdx])
-          AltPred = CmpInst::getSwappedPredicate(AltPred);
-        V1 = Builder.CreateCmp(AltPred, LHS, RHS);
       } else {
         V0 = Builder.CreateCast(
             static_cast<Instruction::CastOps>(E->getOpcode()), LHS, VecTy);
@@ -7026,29 +6870,6 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
           E->Scalars, E->ReorderIndices, E->ReuseShuffleIndices,
           [E](Instruction *I) {
             assert(E->isOpcodeOrAlt(I) && "Unexpected main/alternate opcode");
-            if (auto *CI0 = dyn_cast<CmpInst>(E->getMainOp())) {
-              auto *AltCI0 = cast<CmpInst>(E->getAltOp());
-              auto *CI = cast<CmpInst>(I);
-              CmpInst::Predicate P0 = CI0->getPredicate();
-              CmpInst::Predicate AltP0 = AltCI0->getPredicate();
-              CmpInst::Predicate AltP0Swapped =
-                  CmpInst::getSwappedPredicate(AltP0);
-              CmpInst::Predicate CurrentPred = CI->getPredicate();
-              CmpInst::Predicate CurrentPredSwapped =
-                  CmpInst::getSwappedPredicate(CurrentPred);
-              if (P0 == AltP0 || P0 == AltP0Swapped) {
-                // Alternate cmps have same/swapped predicate as main cmps but
-                // different order of compatible operands.
-                return !(
-                    (P0 == CurrentPred &&
-                     areCompatibleCmpOps(CI0->getOperand(0), CI0->getOperand(1),
-                                         I->getOperand(0), I->getOperand(1))) ||
-                    (P0 == CurrentPredSwapped &&
-                     areCompatibleCmpOps(CI0->getOperand(0), CI0->getOperand(1),
-                                         I->getOperand(1), I->getOperand(0))));
-              }
-              return CurrentPred != P0 && CurrentPredSwapped != P0;
-            }
             return I->getOpcode() == E->getAltOpcode();
           },
           Mask, &OpScalars, &AltScalars);
@@ -8516,6 +8337,8 @@ void SLPVectorizerPass::collectSeedInstructions(BasicBlock *BB) {
 bool SLPVectorizerPass::tryToVectorizePair(Value *A, Value *B, BoUpSLP &R) {
   if (!A || !B)
     return false;
+  if (isa<InsertElementInst>(A) || isa<InsertElementInst>(B))
+    return false;
   Value *VL[] = {A, B};
   return tryToVectorizeList(VL, R);
 }
@@ -9490,21 +9313,22 @@ static Optional<unsigned> getAggregateSize(Instruction *InsertInst) {
   } while (true);
 }
 
-static bool findBuildAggregate_rec(Instruction *LastInsertInst,
+static void findBuildAggregate_rec(Instruction *LastInsertInst,
                                    TargetTransformInfo *TTI,
                                    SmallVectorImpl<Value *> &BuildVectorOpds,
                                    SmallVectorImpl<Value *> &InsertElts,
                                    unsigned OperandOffset) {
   do {
     Value *InsertedOperand = LastInsertInst->getOperand(1);
-    Optional<int> OperandIndex = getInsertIndex(LastInsertInst, OperandOffset);
+    Optional<unsigned> OperandIndex =
+        getInsertIndex(LastInsertInst, OperandOffset);
     if (!OperandIndex)
-      return false;
+      return;
     if (isa<InsertElementInst>(InsertedOperand) ||
         isa<InsertValueInst>(InsertedOperand)) {
-      if (!findBuildAggregate_rec(cast<Instruction>(InsertedOperand), TTI,
-                                  BuildVectorOpds, InsertElts, *OperandIndex))
-        return false;
+      findBuildAggregate_rec(cast<Instruction>(InsertedOperand), TTI,
+                             BuildVectorOpds, InsertElts, *OperandIndex);
+
     } else {
       BuildVectorOpds[*OperandIndex] = InsertedOperand;
       InsertElts[*OperandIndex] = LastInsertInst;
@@ -9514,7 +9338,6 @@ static bool findBuildAggregate_rec(Instruction *LastInsertInst,
            (isa<InsertValueInst>(LastInsertInst) ||
             isa<InsertElementInst>(LastInsertInst)) &&
            LastInsertInst->hasOneUse());
-  return true;
 }
 
 /// Recognize construction of vectors like
@@ -9549,13 +9372,11 @@ static bool findBuildAggregate(Instruction *LastInsertInst,
   BuildVectorOpds.resize(*AggregateSize);
   InsertElts.resize(*AggregateSize);
 
-  if (findBuildAggregate_rec(LastInsertInst, TTI, BuildVectorOpds, InsertElts,
-                             0)) {
-    llvm::erase_value(BuildVectorOpds, nullptr);
-    llvm::erase_value(InsertElts, nullptr);
-    if (BuildVectorOpds.size() >= 2)
-      return true;
-  }
+  findBuildAggregate_rec(LastInsertInst, TTI, BuildVectorOpds, InsertElts, 0);
+  llvm::erase_value(BuildVectorOpds, nullptr);
+  llvm::erase_value(InsertElts, nullptr);
+  if (BuildVectorOpds.size() >= 2)
+    return true;
 
   return false;
 }

@@ -80,12 +80,18 @@ Changes to the AArch64 Backend
   the use of the -mtune frontend flag. This allows certain scheduling features
   and optimisations to be enabled independently of the architecture. If the
   "tune-cpu" attribute is absent it tunes according to the "target-cpu".
+* Fixed relocations against temporary symbols (e.g. in jump tables and
+  constant pools) in large COFF object files.
+* Auto-vectorization now targets SVE by default when available.
 
 Changes to the ARM Backend
 --------------------------
 
 * Added support for the Armv9-A, Armv9.1-A and Armv9.2-A architectures.
 * Added support for the Armv8.1-M PACBTI-M extension.
+* Changed the assembly comment string for MSVC targets to ``@`` (consistent
+  with the MinGW and ELF targets), freeing up ``;`` to be used as
+  statement separator.
 
 Changes to the MIPS Target
 --------------------------
@@ -100,7 +106,59 @@ Changes to the Hexagon Target
 Changes to the PowerPC Target
 -----------------------------
 
-During this release ...
+Linux improvements:
+
+* Provided a number of builtins for compatibility with the XL compiler.
+* Allow MMA builtin types in pre-P10 compilation units.
+* Add support for Return Oriented Programming (ROP) protection for 32 bit.
+* Refactored code to use more inclusive language.
+* Switched to LLD as the default linker for pre-built Linux binaries.
+* Enabled IEEE quad long double on Linux via ``PPC_LINUX_DEFAULT_IEEELONGDOUBLE``
+  in cmake config.
+
+  * Added ``__ibm128`` type to represent IBM double-double format, also available
+    as ``__attribute__((mode(IF)))``.
+  * ``-mfloat128`` can now be used in Linux subtargets with VSX enabled.
+
+* Added quadword atomic load/store support in codegen; not enabled by default.
+* Codegen improvements for splat load, byval parameter, stack lowering, etc.
+* Implemented P10 instruction scheduling model.
+* Implemented P10 instruction fusion pairs.
+* Improved handling of ``#pragma clang loop unroll_and_jam``.
+* Various bug fixes.
+
+AIX Support/improvements:
+
+* Variadic (ellipsis) functions with C complex types are now supported.
+* Added toc-data support for AIX 64-bit.
+* Added toc-data support for read-only globals.
+* Updated default target on AIX from pwr4 to pwr7.
+* AIX 64-bit code generation now uses fast-isel for O0.
+* Added DWARF support for 32-bit XCOFF.
+
+Changes to the RISC-V Target
+----------------------------
+
+* Codegen improvements for RV64 around the selection of addw/subw/mulw/slliw
+  instructions and removal of redundant sext.w instructions (using the new
+  RISCVSExtWRemoval pass).
+* The various RISC-V vector extensions were updated to version 1.0 and are no
+  longer experimental.
+* The Zba, Zbb, Zbc, and Zbs bit-manipulation extensions were updated to
+  version 1.0 and are no longer experimental.
+* Added MC layer support for the ratified scalar cryptography extensions.
+* The Zfh and Zfhmin extensions for half-precision floating point were updated
+  to version 1.0 and are no longer experimental.
+* Added support for the ``.insn`` directive.
+* Various improvements to immediate materialisation, including when
+  bit-manipulation extensions are enabled. Additionally, the constant pool is
+  now used for large integers.
+* Added support for constrained FP intrinsics for scalar types.
+* Added support for CSRs introduced in the Sscofpmf, Smstateen, and Sstc
+  extensions.
+* The experimental 'Zbproposedc' extension was removed, as was the 'B'
+  extension (including all bit-manipulation sub-extensions). Individual 'Zb*'
+  extensions should be used instead.
 
 Changes to the X86 Target
 -------------------------
@@ -108,6 +166,8 @@ Changes to the X86 Target
 During this release ...
 
 * Support for ``AVX512-FP16`` instructions has been added.
+* Removed incomplete support for Intel MPX.
+  (`D111517 <https://reviews.llvm.org/D111517>`_)
 
 Changes to the AMDGPU Target
 -----------------------------
@@ -124,6 +184,28 @@ Changes to the WebAssembly Target
 
 During this release ...
 
+Changes to the Windows Target
+-----------------------------
+
+* Changed how the ``.pdata`` sections refer to the code they're describing,
+  to avoid conflicting unwind info if weak symbols are overridden.
+
+* Fixed code generation for calling support routines for converting 128 bit
+  integers from/to floats on x86_64.
+
+* The preferred path separator form (backslashes or forward slashes) can be
+  configured in Windows builds of LLVM now, with the
+  ``LLVM_WINDOWS_PREFER_FORWARD_SLASH`` CMake option. This defaults to
+  true in MinGW builds of LLVM.
+
+* Set proper COFF symbol types for function aliases (e.g. for Itanium C++
+  constructors), making sure that GNU ld exports all of them correctly as
+  functions, not data, when linking a DLL.
+
+* Handling of temporary files on more uncommon file systems (network
+  mounts, ramdisks) on Windows is fixed now (which previously either
+  errored out or left stray files behind).
+
 Changes to the OCaml bindings
 -----------------------------
 
@@ -133,6 +215,9 @@ Changes to the C API
 
 * ``LLVMSetInstDebugLocation`` has been deprecated in favor of the more general
   ``LLVMAddMetadataToInst``.
+
+* Fixed building LLVM-C.dll for i386 targets with MSVC, which had been broken
+  since the LLVM 8.0.0 release.
 
 Changes to the Go bindings
 --------------------------
@@ -159,6 +244,47 @@ Changes to the LLVM tools
   `-name-whitelist` is marked as deprecated and to be removed in future
   releases.
 
+* llvm-ar now supports ``--thin`` for creating a thin archive. The modifier
+  ``T`` has a different meaning in some ar implementations.
+  (`D116979 <https://reviews.llvm.org/D116979>`_)
+* llvm-ar now supports reading big archives for XCOFF.
+  (`D111889 <https://reviews.llvm.org/D111889>`_)
+* llvm-nm now demangles Rust symbols.
+  (`D111937 <https://reviews.llvm.org/D111937>`_)
+* llvm-objcopy's ELF port now avoids reordering section headers to preserve ``st_shndx`` fields of dynamic symbols.
+  (`D107653 <https://reviews.llvm.org/D112116>`_)
+* llvm-objcopy now supports ``--update-section`` for ELF and Mach-O.
+  (`D112116 <https://reviews.llvm.org/D112116>`_)
+  (`D117281 <https://reviews.llvm.org/D117281>`_)
+* llvm-objcopy now supports ``--subsystem`` for PE/COFF.
+  (`D116556 <https://reviews.llvm.org/D116556>`_)
+* llvm-objcopy now supports mips64le relocations for ELF.
+  (`D115635 <https://reviews.llvm.org/D115635>`_)
+* llvm-objcopy ``--rename-section`` now renames relocation sections together with their targets.
+  (`D110352 <https://reviews.llvm.org/D110352>`_)
+* llvm-objdump ``--symbolize-operands`` now supports PowerPC.
+  (`D114492 <https://reviews.llvm.org/D114492>`_)
+* llvm-objdump ``-p`` now dumps PE header.
+  (`D113356 <https://reviews.llvm.org/D113356>`_)
+* llvm-objdump ``-R`` now supports ELF position-dependent executables.
+  (`D110595 <https://reviews.llvm.org/D110595>`_)
+* llvm-objdump ``-T`` now prints symbol versions.
+  (`D108097 <https://reviews.llvm.org/D108097>`_)
+* llvm-readobj: Improved printing of symbols in Windows unwind data.
+* llvm-readobj now supports ``--elf-output-style=JSON`` for JSON output and
+  ``--pretty-print`` for pretty printing of this output.
+  (`D114225 <https://reviews.llvm.org/D114225>`_)
+* llvm-readobj now supports several dump styles (``--needed-libs, --relocs, --syms``) for XCOFF.
+* llvm-symbolizer now supports `--debuginfod <https://llvm.org/docs/CommandGuide/llvm-symbolizer.html>`.
+  (`D113717 <https://reviews.llvm.org/D113717>`_)
+* ``llvm-cov`` now accepts "allowlist" spelling for ``-name-allowlist``.
+* ``llvm-nm`` now supports XCOFF object files.
+* Added ``--needed-libs``, aux header, and symbols support in ``llvm-readobj``.
+* Added ``--symbolize-operands`` support in ``llvm-objdump``.
+* Tools that read archive files now support reading AIX big format archive files.
+* Added dump section support in ``obj2yaml``.
+* Added ``yaml2obj`` support for 64-bit XCOFF.
+
 Changes to LLDB
 ---------------------------------
 
@@ -171,14 +297,33 @@ Changes to LLDB
 
   * ``memory find``
   * ``memory read``
+  * ``memory region`` (see below)
   * ``memory tag read``
   * ``memory tag write``
+
+* The ``memory region`` command and ``GetMemoryRegionInfo`` API method now
+  ignore non-address bits in the address parameter. This also means that on
+  systems with non-address bits the last (usually unmapped) memory region
+  will not extend to 0xF...F. Instead it will end at the end of the mappable
+  range that the virtual address size allows.
 
 * The ``memory read`` command has a new option ``--show-tags``. Use this option
   to show memory tags beside the contents of tagged memory ranges.
 
+* Fixed continuing from breakpoints and singlestepping on Windows on ARM/ARM64.
+
+* LLDB has been included in Windows on ARM64 binary release with Python support
+  disabled.
+
 Changes to Sanitizers
 ---------------------
+
+Changes to BOLT
+---------------------
+
+* BOLT project is added to the LLVM monorepo. BOLT is a post-link optimizer
+  developed to speed up large applications. Build and usage instructions are
+  given in `README <https://github.com/llvm/llvm-project/tree/main/bolt>`_.
 
 External Open Source Projects Using LLVM 14
 ===========================================

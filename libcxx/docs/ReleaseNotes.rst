@@ -77,6 +77,9 @@ New Features
 - More C++2b features have been implemented. :doc:`Status/Cxx2b` has the full
   overview of libc++'s C++2b implementation status.
 
+- 16-bit ``wchar_t`` handling added for ``codecvt_utf8``, ``codecvt_utf16`` and
+  ``codecvt_utf8_utf16``.
+
 API Changes
 -----------
 
@@ -145,7 +148,7 @@ API Changes
 - The ``<experimental/coroutine>`` header is deprecated, as is any
   use of coroutines without C++20. Use C++20's ``<coroutine>`` header
   instead. The ``<experimental/coroutine>`` header will be removed
-  in LLVM 15.
+  in LLVM 16.
 
 - ``_VSTD`` is now an alias for ``std`` instead of ``std::_LIBCPP_ABI_NAMESPACE``.
   This is technically not a functional change, except for folks that might have been
@@ -189,14 +192,14 @@ Build System Changes
   Consider using a Bootstrapping build to build libc++ with a fresh Clang if you
   can't use the system compiler to build libc++ anymore.
 
-- Historically, there have been numerous ways of building libc++ and libc++abi. This has
-  led to at least 5 different ways to build the runtimes, which was impossible to
-  maintain with a good level of support. Starting with this release, libc++ and libc++abi support
-  exactly two ways of being built, which should cater to all use-cases. Furthermore,
-  these builds are as lightweight as possible and will work consistently even when targeting
-  embedded platforms, which used not to be the case. :doc:`BuildingLibcxx` describes
-  those two ways of building. Please migrate over to the appropriate build instructions
-  as soon as possible.
+- Historically, there have been numerous ways of building libc++, libc++abi, and libunwind.
+  This has led to at least 5 different ways to build the runtimes, which was impossible to
+  maintain with a good level of support. Starting with this release, libc++, libc++abi, and
+  libunwind support exactly two ways of being built, which should cater to all use-cases.
+  Furthermore, these builds are as lightweight as possible and will work consistently even
+  when targeting embedded platforms, which used not to be the case. :doc:`BuildingLibcxx`
+  describes those two ways of building. Please migrate over to the appropriate build
+  instructions as soon as possible.
 
   All other ways to build are deprecated and will not be supported in the next release.
   We understand that making these changes can be daunting. For that reason, here's a
@@ -206,8 +209,8 @@ Build System Changes
     (which was the previously advertised way to build the runtimes), please simply root your CMake invocation at
     ``<monorepo>/runtimes`` and pass ``-DLLVM_ENABLE_RUNTIMES=<...>``.
 
-  - If you were doing two CMake invocations, one rooted at ``<monorepo>/libcxx`` and one rooted at
-    ``<monorepo>/libcxxabi`` (this used to be called a "Standalone build"), please move them to a
+  - If you were doing multiple CMake invocations, e.g. one rooted at ``<monorepo>/libcxx`` and one rooted
+    at ``<monorepo>/libcxxabi`` (this used to be called a "Standalone build"), please move them to a
     single invocation like so:
 
     .. code-block:: bash
@@ -235,3 +238,8 @@ Build System Changes
   ``-DCMAKE_POSITION_INDEPENDENT_CODE=ON`` explicitly when configuring the build, or
   ``-DRUNTIMES_<target-name>_CMAKE_POSITION_INDEPENDENT_CODE=ON`` if using the
   bootstrapping build.
+
+- The ``{LIBCXX,LIBCXXABI,LIBUNWIND}_TARGET_TRIPLE``, ``{LIBCXX,LIBCXXABI,LIBUNWIND}_SYSROOT`` and
+  ``{LIBCXX,LIBCXXABI,LIBUNWIND}_GCC_TOOLCHAIN`` CMake variables are deprecated. Instead, please use
+  the ``CMAKE_CXX_COMPILER_TARGET``, ``CMAKE_SYSROOT`` and ``CMAKE_CXX_COMPILER_EXTERNAL_TOOLCHAIN``
+  variables provided by CMake.
