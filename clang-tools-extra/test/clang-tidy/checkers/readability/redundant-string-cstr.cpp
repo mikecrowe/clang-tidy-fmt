@@ -94,6 +94,11 @@ void f4(const std::string &s) {
   f1(ptr->c_str());
   // CHECK-MESSAGES: :[[@LINE-1]]:6: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
   // CHECK-FIXES: {{^  }}f1(*ptr);{{$}}
+
+  std::string tmp;
+  tmp = ptr->c_str();
+  // CHECK-MESSAGES: :[[@LINE-1]]:9: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}tmp = *ptr;{{$}}
 }
 void f5(const std::string &s) {
   std::string tmp;
