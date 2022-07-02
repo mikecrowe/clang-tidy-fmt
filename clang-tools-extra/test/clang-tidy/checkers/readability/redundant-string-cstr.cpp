@@ -58,6 +58,11 @@ bool operator==(const std::string&, const std::string&);
 bool operator==(const std::string&, const char*);
 bool operator==(const char*, const std::string&);
 
+template <typename T>
+struct iterator {
+  T *operator->();
+};
+
 namespace llvm {
 struct StringRef {
   StringRef(const char *p);
@@ -226,6 +231,15 @@ void m1(std::string&&) {
   using m1tp = void (*)(std::string &&);
   m1tp m1p2 = m1;
   m1p2(s.c_str());  
+}
+
+// Test for iterator
+void it(iterator<std::string> i)
+{
+  std::string tmp;
+  tmp = i->c_str();
+  // CHECK-MESSAGES: :[[@LINE-1]]:7: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}tmp = *i;{{$}}
 }
 
 namespace PR45286 {
