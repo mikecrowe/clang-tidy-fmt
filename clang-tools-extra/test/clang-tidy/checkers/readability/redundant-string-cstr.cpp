@@ -238,7 +238,7 @@ void it(iterator<std::string> i)
 {
   std::string tmp;
   tmp = i->c_str();
-  // CHECK-MESSAGES: :[[@LINE-1]]:7: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-MESSAGES: :[[@LINE-1]]:9: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
   // CHECK-FIXES: {{^  }}tmp = *i;{{$}}
 }
 
@@ -341,6 +341,8 @@ class DerivedTrace : public BaseTrace {};
 
 class DoubleDerivedTrace : public DerivedTrace {};
 
+typedef DerivedTrace TypedefDerivedTrace;
+
 class NullTrace {
 public:
   template <typename... Args>
@@ -374,6 +376,11 @@ void trace1(const std::string &s1) {
   TRACED("%d %s\n", 42, s1.c_str());
   // CHECK-MESSAGES: :[[@LINE-1]]:25: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
   // CHECK-FIXES: {{^  }}TRACED("%d %s\n", 42, s1);
+
+  TypedefDerivedTrace TRACET;
+  TRACET("%d %s\n", 42, s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:25: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}TRACET("%d %s\n", 42, s1);
 }
 
 void trace2(const std::string &s1) {
