@@ -54,6 +54,10 @@ formatDereference(const ast_matchers::MatchFinder::MatchResult &Result,
 
   if (Text.empty())
     return std::string();
+
+  // https://github.com/llvm/llvm-project/issues/56705
+  Text.consume_back("->");
+
   // Add leading '*'.
   if (needParensAfterUnaryOperator(ExprNode)) {
     return (llvm::Twine("*(") + Text + ")").str();
