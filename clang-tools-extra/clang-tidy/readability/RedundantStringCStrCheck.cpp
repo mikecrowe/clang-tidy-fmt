@@ -190,9 +190,9 @@ void RedundantStringCStrCheck::registerMatchers(
 #endif
 
   const auto TraceClassExpr =
-    expr(hasType(cxxRecordDecl(isSameOrDerivedFrom("::BaseTrace"))));
+    expr(hasType(hasCanonicalType(hasDeclaration(cxxRecordDecl(isSameOrDerivedFrom("::BaseTrace"))))));
   const auto NullTraceClassExpr =
-    expr(hasType(cxxRecordDecl(isSameOrDerivedFrom("::NullTrace"))));
+    expr(hasType(hasCanonicalType(hasDeclaration(cxxRecordDecl(isSameOrDerivedFrom("::NullTrace"))))));
 
   Finder->addMatcher(traverse(
                        TK_AsIs, cxxOperatorCallExpr(
