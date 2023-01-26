@@ -269,18 +269,18 @@ void bar() {
 namespace fmt {
   inline namespace v8 {
     template<typename ...Args>
-    void print(const char *, Args...);
+    void print(const char *, Args &&...);
     template<typename ...Args>
-    std::string format(const char *, Args...);
+    std::string format(const char *, Args &&...);
   }
 }
 
 namespace notfmt {
   inline namespace v8 {
     template<typename ...Args>
-    void print(const char *, Args...);
+    void print(const char *, Args &&...);
     template<typename ...Args>
-    std::string format(const char *, Args...);
+    std::string format(const char *, Args &&...);
   }
 }
 

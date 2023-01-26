@@ -184,7 +184,7 @@ void RedundantStringCStrCheck::registerMatchers(
       traverse(
       TK_AsIs,
       callExpr(anyOf(callee(functionDecl(hasName("::fmt::print"))), callee(functionDecl(hasName("::fmt::format")))),
-                     hasAnyArgument(StringCStrCallExpr))),
+               hasAnyArgument(materializeTemporaryExpr(has(StringCStrCallExpr))))),
 //                     hasArgument(1, StringCStrCallExpr))),
       this);
 #endif
