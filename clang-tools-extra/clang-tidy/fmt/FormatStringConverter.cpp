@@ -201,6 +201,12 @@ bool FormatStringConverter::HandlePrintfSpecifier(
         if (Arg->getType()->isCharType() || !Arg->getType()->isIntegerType())
           FormatSpec.push_back('d');
         break;
+      case ConversionSpecifier::Kind::uArg:
+        // We can't specify 'u', so let's fail if anyone tries to convert
+        // anything that would require a cast for now.
+        if (!Arg->getType()->isUnsignedIntegerType())
+          ConversionPossible = false;
+        break;
       case ConversionSpecifier::Kind::pArg:
         PointerArgs.push_back(Arg);
         break;

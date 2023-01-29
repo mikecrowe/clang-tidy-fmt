@@ -89,9 +89,23 @@ void printf_integer() {
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
   // CHECK-FIXES: fmt::print("Integer {} from integer\n", 65);
 
-  printf("Integer %u from unsigned long\n", 42ULL);
+  printf("Integer %u from unsigned integer\n", 42U);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Integer {:u} from unsigned long\n", 42ULL);
+  // CHECK-FIXES: fmt::print("Integer {} from unsigned integer\n", 42U);
+
+  // This doesn't work yet. It will require a cast since there's no unsigned format
+  printf("Integer %u from signed integer\n", 42);
+  // XCHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // XCHECK-FIXES: fmt::print("Integer {} from signed integer\n", static_cast<unsigned int>(42));
+
+  printf("Integer %lu from unsigned long\n", 42UL);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Integer {} from unsigned long\n", 42UL);
+
+  // This doesn't work yet. It will require a cast since there's no unsigned format
+  printf("Integer %u from signed long\n", 42L);
+  // XCHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // XCHECK-FIXES: fmt::print("Integer {} from signed integer\n", static_cast<unsigned int>(42));
 
   printf("Integer %i from char\n", 'A');
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
@@ -103,7 +117,7 @@ void printf_integer() {
 
   printf("Integer %u from unsigned char\n", (unsigned char)'A');
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
-  // CHECK-FIXES: fmt::print("Integer {:u} from unsigned char\n", 'A');
+  // CHECK-FIXES: fmt::print("Integer {} from unsigned char\n", (unsigned char)'A');
 }
 
 // This checks that we get the argument offset right with the extra FILE * argument
@@ -130,9 +144,21 @@ void printf_char() {
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
   // CHECK-FIXES: fmt::print("Char {} from char\n", 'A');
 
+  printf("Char %c from signed char\n", (signed)'A');
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Char {:c} from signed char\n", (signed)'A');
+
   printf("Char %c from integer\n", 65);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
   // CHECK-FIXES: fmt::print("Char {:c} from integer\n", 65);
+
+  printf("Char %c from unsigned char\n", (unsigned)'A');
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Char {:c} from unsigned char\n", (unsigned)'A');
+
+  printf("Char %c from unsigned integer\n", 65U);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Char {:c} from unsigned integer\n", 65U);
 }
 
 void printf_bases() {
