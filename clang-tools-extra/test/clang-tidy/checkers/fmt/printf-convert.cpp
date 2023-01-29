@@ -39,6 +39,16 @@ void printf_percent() {
   // CHECK-FIXES: fmt::print("Hello % and another %");
 }
 
+void printf_curlies() {
+  printf("%d {}", 42);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("{} {{[{][{]}}}}", 42);
+
+  printf("{}");
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("{{[{][{]}}}}");
+}
+
 void printf_unsupported() {
   int pos;
   printf("%d %n %d\n", 42, &pos, 72);

@@ -44,14 +44,14 @@ class FormatStringConverter
                                      unsigned specifierLen,
                                      const TargetInfo &Target) override;
 
-  std::string getStandardFormatString();
-
 public:
   FormatStringConverter(const ASTContext *Context, const CallExpr *Call,
                         unsigned FormatArgOffset, const LangOptions &LO);
 
   bool canApply() const { return ConversionPossible; }
   void applyFixes(DiagnosticBuilder &Diag, SourceManager &SM);
+  void appendFormatText(StringRef Text);
+  void finalizeFormatText();
 };
 
 } // namespace fmt

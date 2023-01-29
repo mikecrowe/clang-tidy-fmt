@@ -31,6 +31,7 @@ FormatStringConverter::FormatStringConverter(const ASTContext *ContextIn,
   // Assume that the output will be approximately the same size as the input,
   // but perhaps with a few escapes expanded.
   StandardFormatString.reserve(PrintfFormatString.size() + 8);
+  StandardFormatString.push_back('\"');
 
   const bool IsFreeBsdkPrintf = false;
 
@@ -51,9 +52,9 @@ bool FormatStringConverter::HandlePrintfSpecifier(
   // Everything before the specifier needs copying verbatim
   assert(StartSpecifierPos >= PrintfFormatStringPos);
 
-  StandardFormatString.append(PrintfFormatString.begin() +
-                                  PrintfFormatStringPos,
-                              PrintfFormatString.begin() + StartSpecifierPos);
+  appendFormatText(StringRef(PrintfFormatString.begin() +
+                             PrintfFormatStringPos,
+                             StartSpecifierPos - PrintfFormatStringPos));
 
   using analyze_format_string::ConversionSpecifier;
   const ConversionSpecifier Spec = FS.getConversionSpecifier();
@@ -267,51 +268,58 @@ bool FormatStringConverter::HandlePrintfSpecifier(
   return true;
 }
 
-std::string FormatStringConverter::getStandardFormatString() {
-  StandardFormatString.append(PrintfFormatString.begin() +
-                                  PrintfFormatStringPos,
-                              PrintfFormatString.end());
+void FormatStringConverter::finalizeFormatText() {
+  appendFormatText(StringRef(PrintfFormatString.begin() +
+                             PrintfFormatStringPos,
+                             PrintfFormatString.size() - PrintfFormatStringPos));
   PrintfFormatStringPos = PrintfFormatString.size();
 
-  std::string Result;
-  Result.push_back('\"');
-  for (const char Ch : StandardFormatString) {
+  StandardFormatString.push_back('\"');
+}
+
+void FormatStringConverter::appendFormatText(const StringRef Text) {
+  for (const char Ch : Text) {
     if (Ch == '\a')
-      Result += "\\a";
+      StandardFormatString += "\\a";
     else if (Ch == '\b')
-      Result += "\\b";
+      StandardFormatString += "\\b";
     else if (Ch == '\f')
-      Result += "\\f";
+      StandardFormatString += "\\f";
     else if (Ch == '\n')
-      Result += "\\n";
+      StandardFormatString += "\\n";
     else if (Ch == '\r')
-      Result += "\\r";
+      StandardFormatString += "\\r";
     else if (Ch == '\t')
-      Result += "\\t";
+      StandardFormatString += "\\t";
     else if (Ch == '\v')
-      Result += "\\v";
+      StandardFormatString += "\\v";
     else if (Ch == '\"')
-      Result += "\\\"";
+      StandardFormatString += "\\\"";
     else if (Ch == '\\')
-      Result += "\\\\";
-    else if (Ch < 32) {
-      Result += "\\x";
-      Result += llvm::hexdigit(Ch >> 4, true);
-      Result += llvm::hexdigit(Ch & 0xf, true);
+      StandardFormatString += "\\\\";
+    else if (Ch == '{') {
+      StandardFormatString += "{{";
+      FormatStringNeededRewriting = true;
+    } else if (Ch == '}') {
+      StandardFormatString += "}}";
+      FormatStringNeededRewriting = true;
+    } else if (Ch < 32) {
+      StandardFormatString += "\\x";
+      StandardFormatString += llvm::hexdigit(Ch >> 4, true);
+      StandardFormatString += llvm::hexdigit(Ch & 0xf, true);
     } else
-      Result += Ch;
+      StandardFormatString += Ch;
   }
-  Result.push_back('\"');
-  return Result;
 }
 
 void FormatStringConverter::applyFixes(DiagnosticBuilder &Diag,
                                        SourceManager &SM) {
+  finalizeFormatText();
   if (FormatStringNeededRewriting) {
     Diag << FixItHint::CreateReplacement(
         CharSourceRange::getTokenRange(FormatExpr->getBeginLoc(),
                                        FormatExpr->getEndLoc()),
-        getStandardFormatString());
+        StandardFormatString);
   }
   for (const Expr *Arg : PointerArgs) {
     SourceLocation AfterOtherSide =
