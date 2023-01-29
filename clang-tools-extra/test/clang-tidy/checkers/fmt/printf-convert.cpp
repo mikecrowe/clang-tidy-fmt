@@ -89,6 +89,10 @@ void printf_integer() {
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
   // CHECK-FIXES: fmt::print("Integer {} from integer\n", 65);
 
+  printf("Integer %u from unsigned long\n", 42ULL);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Integer {:u} from unsigned long\n", 42ULL);
+
   printf("Integer %i from char\n", 'A');
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
   // CHECK-FIXES: fmt::print("Integer {:d} from char\n", 'A');
@@ -96,6 +100,10 @@ void printf_integer() {
   printf("Integer %d from char\n", 'A');
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
   // CHECK-FIXES: fmt::print("Integer {:d} from char\n", 'A');
+
+  printf("Integer %u from unsigned char\n", (unsigned char)'A');
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: Replace printf with fmt::print [fmt-printf-convert]
+  // CHECK-FIXES: fmt::print("Integer {:u} from unsigned char\n", 'A');
 }
 
 // This checks that we get the argument offset right with the extra FILE * argument
