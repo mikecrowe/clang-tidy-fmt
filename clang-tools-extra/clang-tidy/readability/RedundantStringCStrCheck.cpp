@@ -178,6 +178,16 @@ void RedundantStringCStrCheck::registerMatchers(
               // directly.
               hasArgument(0, StringCStrCallExpr))),
       this);
+
+  // Detect the first redundant 'c_str()' call in parameters passed to
+  // std::print and std::format.
+  Finder->addMatcher(
+      traverse(TK_AsIs,
+               callExpr(anyOf(callee(functionDecl(hasName("::std::print"))),
+                              callee(functionDecl(hasName("::std::format")))),
+                        hasAnyArgument(materializeTemporaryExpr(
+                            has(StringCStrCallExpr))))),
+      this);
 }
 
 void RedundantStringCStrCheck::check(const MatchFinder::MatchResult &Result) {

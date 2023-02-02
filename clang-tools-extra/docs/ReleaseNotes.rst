@@ -123,6 +123,12 @@ New check aliases
 
 Changes in existing checks
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+- Improved :doc:`readability-redundant-string-cstr
+  <clang-tidy/checks/readability/redundant-string-cstr>` check to recognise
+  unnecessary ``std::string::c_str()`` and ``std::string::data()`` calls in
+  arguments to ``std::print`` and ``std::format``. Note that only the first
+  such argument is currently reported so it may be necessary to run the
+  check multiple times to fix all of them.
 
 Removed checks
 ^^^^^^^^^^^^^^
