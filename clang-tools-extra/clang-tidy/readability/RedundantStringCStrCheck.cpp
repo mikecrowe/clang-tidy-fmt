@@ -182,6 +182,16 @@ void RedundantStringCStrCheck::registerMatchers(
               // directly.
               hasArgument(0, StringCStrCallExpr))),
       this);
+
+  // Detect redundant 'c_str()' calls in the first argument to 'fmt::print' and
+  // 'fmt::format'.
+  Finder->addMatcher(
+      traverse(TK_AsIs,
+               callExpr(anyOf(callee(functionDecl(hasName("::fmt::print"))),
+                              callee(functionDecl(hasName("::fmt::format")))),
+                        hasAnyArgument(materializeTemporaryExpr(
+                            has(StringCStrCallExpr))))),
+      this);
 }
 
 void RedundantStringCStrCheck::check(const MatchFinder::MatchResult &Result) {
