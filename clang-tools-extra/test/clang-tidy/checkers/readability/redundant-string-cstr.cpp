@@ -310,3 +310,63 @@ void bar() {
   Foo.func2((Str.c_str()));
 }
 } // namespace PR45286
+
+namespace fmt {
+  inline namespace v8 {
+    template<typename ...Args>
+    void print(const char *, Args &&...);
+    template<typename ...Args>
+    std::string format(const char *, Args &&...);
+  }
+}
+
+namespace notfmt {
+  inline namespace v8 {
+    template<typename ...Args>
+    void print(const char *, Args &&...);
+    template<typename ...Args>
+    std::string format(const char *, Args &&...);
+  }
+}
+
+void fmt_print(const std::string &s1, const std::string &s2, const std::string &s3) {
+  fmt::print("One:{}\n", s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:26: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}fmt::print("One:{}\n", s1);
+
+  fmt::print("One:{} Two:{} Three:{}\n", s1.c_str(), s2, s3.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:42: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-MESSAGES: :[[@LINE-2]]:58: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}fmt::print("One:{} Two:{} Three:{}\n", s1, s2, s3);
+}
+
+// There's no c_str() call here, so it shouldn't be touched
+void fmt_print_no_cstr(const std::string &s1, const std::string &s2) {
+    fmt::print("One: {}, Two: {}\n", s1, s2);
+}
+
+// This isn't fmt::print, so it shouldn't be fixed.
+void not_fmt_print(const std::string &s1) {
+    notfmt::print("One: {}\n", s1.c_str());
+}
+
+void fmt_format(const std::string &s1, const std::string &s2, const std::string &s3) {
+  auto r1 = fmt::format("One:{}\n", s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:37: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}auto r1 = fmt::format("One:{}\n", s1);
+
+  auto r2 = fmt::format("One:{} Two:{} Three:{}\n", s1.c_str(), s2, s3.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:53: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-MESSAGES: :[[@LINE-2]]:69: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}auto r2 = fmt::format("One:{} Two:{} Three:{}\n", s1, s2, s3);
+}
+
+// There's are c_str() calls here, so it shouldn't be touched
+void fmt_format_no_cstr(const std::string &s1, const std::string &s2) {
+    fmt::format("One: {}, Two: {}\n", s1, s2);
+}
+
+// This is not fmt::format, so it shouldn't be fixed
+std::string not_fmt_format(const std::string &s1) {
+    return notfmt::format("One: {}\n", s1.c_str());
+}
