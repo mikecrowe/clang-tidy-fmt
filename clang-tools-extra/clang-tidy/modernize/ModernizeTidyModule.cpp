@@ -26,6 +26,7 @@
 #include "ReplaceRandomShuffleCheck.h"
 #include "ReturnBracedInitListCheck.h"
 #include "ShrinkToFitCheck.h"
+#include "TraceFormatCheck.h"
 #include "TypeTraitsCheck.h"
 #include "UnaryStaticAssertCheck.h"
 #include "UseAutoCheck.h"
@@ -88,6 +89,7 @@ public:
     CheckFactories.registerCheck<ReturnBracedInitListCheck>(
         "modernize-return-braced-init-list");
     CheckFactories.registerCheck<ShrinkToFitCheck>("modernize-shrink-to-fit");
+    CheckFactories.registerCheck<TraceFormatCheck>("modernize-trace-format");
     CheckFactories.registerCheck<TypeTraitsCheck>("modernize-type-traits");
     CheckFactories.registerCheck<UnaryStaticAssertCheck>(
         "modernize-unary-static-assert");
