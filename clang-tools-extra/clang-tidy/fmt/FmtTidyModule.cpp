@@ -10,6 +10,7 @@
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
 #include "PrintfConvertCheck.h"
+#include "StrPrintfConvertCheck.h"
 
 namespace clang {
 namespace tidy {
@@ -19,6 +20,8 @@ class FmtModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
     CheckFactories.registerCheck<PrintfConvertCheck>("fmt-printf-convert");
+    CheckFactories.registerCheck<StrPrintfConvertCheck>(
+        "fmt-strprintf-convert");
   }
 };
 
