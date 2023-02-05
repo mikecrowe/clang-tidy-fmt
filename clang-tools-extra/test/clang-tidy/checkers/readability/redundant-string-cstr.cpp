@@ -370,3 +370,77 @@ void fmt_format_no_cstr(const std::string &s1, const std::string &s2) {
 std::string not_fmt_format(const std::string &s1) {
     return notfmt::format("One: {}\n", s1.c_str());
 }
+
+class BaseTrace {
+public:
+  template <typename... Args>
+  void operator()(const char *fmt, Args &&...args) {
+  }
+
+  template <typename... Args>
+  void Trace(const char *fmt, Args &&...args) {
+  }
+
+  template <typename... Args>
+  void F(const char *fmt, Args &&...args) {
+  }
+};
+
+class DerivedTrace : public BaseTrace {};
+
+class DoubleDerivedTrace : public DerivedTrace {};
+
+typedef DerivedTrace TypedefDerivedTrace;
+
+class NullTrace {
+public:
+  template <typename... Args>
+  void operator()(const char *fmt, Args &&...args) {
+  }
+
+  template <typename... Args>
+  void Trace(const char *fmt, Args &&...args) {
+  }
+
+  template <typename... Args>
+  void F(const char *fmt, Args &&...args) {
+  }
+};
+
+class NullDerivedTrace : public NullTrace {};
+
+void trace1(const std::string &s1) {
+  BaseTrace TRACE;
+
+  TRACE("%s\n", s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:17: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}TRACE("%s\n", s1);
+
+  DerivedTrace TRACE2;
+  TRACE2("%d %s\n", 42, s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:25: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}TRACE2("%d %s\n", 42, s1);
+
+  DoubleDerivedTrace TRACED;
+  TRACED("%d %s\n", 42, s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:25: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}TRACED("%d %s\n", 42, s1);
+
+  TypedefDerivedTrace TRACET;
+  TRACET("%d %s\n", 42, s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:25: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}TRACET("%d %s\n", 42, s1);
+}
+
+void trace2(const std::string &s1) {
+  NullTrace TRACE3;
+
+  TRACE3("%s\n", s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:18: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}TRACE3("%s\n", s1);
+
+  NullDerivedTrace TRACE4;
+  TRACE4("%d %s\n", 42, s1.c_str());
+  // CHECK-MESSAGES: :[[@LINE-1]]:25: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: {{^  }}TRACE4("%d %s\n", 42, s1);
+}
