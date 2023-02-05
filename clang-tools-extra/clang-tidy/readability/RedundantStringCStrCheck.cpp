@@ -192,6 +192,20 @@ void RedundantStringCStrCheck::registerMatchers(
               callee(functionDecl(hasAnyName("::fmt::format", "::fmt::print"))),
               forEachArgumentWithParam(StringCStrCallExpr, parmVarDecl()))),
       this);
+
+  const auto TraceClassExpr = expr(hasType(hasCanonicalType(
+      hasDeclaration(cxxRecordDecl(isSameOrDerivedFrom("::BaseTrace"))))));
+  const auto NullTraceClassExpr = expr(hasType(hasCanonicalType(
+      hasDeclaration(cxxRecordDecl(isSameOrDerivedFrom("::NullTrace"))))));
+
+  Finder->addMatcher(
+      traverse(
+          TK_AsIs,
+          cxxOperatorCallExpr(
+              hasOverloadedOperatorName("()"),
+              hasArgument(0, anyOf(TraceClassExpr, NullTraceClassExpr)),
+              forEachArgumentWithParam(StringCStrCallExpr, parmVarDecl()))),
+      this);
 }
 
 void RedundantStringCStrCheck::check(const MatchFinder::MatchResult &Result) {
