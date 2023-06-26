@@ -164,33 +164,33 @@ void printf_integer_d() {
 
   // The 'd' is always necessary since otherwise the parameter will be formatted as a character
   const char c = 'A';
-  printf("Integer %d from char\n", c);
+  printf("Integers %d %hhd from char\n", c, c);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
-  // CHECK-FIXES: std::println("Integer {:d} from char", c);
+  // CHECK-FIXES: std::println("Integers {:d} {:d} from char", c, c);
 
-  printf("Integer %i from char\n", 'A');
+  printf("Integers %i %hhi from char\n", c, c);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
-  // CHECK-FIXES: std::println("Integer {:d} from char", 'A');
+  // CHECK-FIXES: std::println("Integers {:d} {:d} from char", c, c);
 
   const signed char sc = 'A';
-  printf("Integer %hhd from signed char\n", sc);
+  printf("Integers %d %hhd from signed char\n", sc, sc);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
-  // CHECK-FIXES: std::println("Integer {} from signed char", sc);
+  // CHECK-FIXES: std::println("Integers {} {} from signed char", sc, sc);
 
-  printf("Integer %hhi from signed char\n", sc);
+  printf("Integers %i %hhi from signed char\n", sc, sc);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
-  // CHECK-FIXES: std::println("Integer {} from signed char", sc);
+  // CHECK-FIXES: std::println("Integers {} {} from signed char", sc, sc);
 
   const unsigned char uc = 'A';
-  printf("Integer %hhd from unsigned char\n", uc);
+  printf("Integers %d %hhd from unsigned char\n", uc, uc);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
-  // CHECK-FIXES-NOTSTRICT: std::println("Integer {} from unsigned char", uc);
-  // CHECK-FIXES-STRICT: std::println("Integer {} from unsigned char", static_cast<signed char>(uc));
+  // CHECK-FIXES-NOTSTRICT: std::println("Integers {} {} from unsigned char", uc, uc);
+  // CHECK-FIXES-STRICT: std::println("Integers {} {} from unsigned char", static_cast<signed char>(uc), static_cast<signed char>(uc));
 
-  printf("Integer %hhi from unsigned char\n", uc);
+  printf("Integers %i %hhi from unsigned char\n", uc, uc);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
-  // CHECK-FIXES-NOTSTRICT: std::println("Integer {} from unsigned char", uc);
-  // CHECK-FIXES-STRICT: std::println("Integer {} from unsigned char", static_cast<signed char>(uc));
+  // CHECK-FIXES-NOTSTRICT: std::println("Integers {} {} from unsigned char", uc, uc);
+  // CHECK-FIXES-STRICT: std::println("Integers {} {} from unsigned char", static_cast<signed char>(uc), static_cast<signed char>(uc));
 
   const int8_t i8 = 42;
   printf("Integer %" PRIi8 " from int8_t\n", i8);
