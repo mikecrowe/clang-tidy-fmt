@@ -155,6 +155,14 @@ castTypeForArgument(ConversionSpecifier::Kind ArgKind,
 
 static bool isMatchingSignedness(ConversionSpecifier::Kind ArgKind,
                                  const clang::QualType &ArgType) {
+  if (const auto *BT = llvm::dyn_cast<BuiltinType>(ArgType)) {
+    // Unadorned char never matches any expected signedness since it
+    // could be signed or unsigned.
+    const auto ArgTypeKind = BT->getKind();
+    if (ArgTypeKind == BuiltinType::Char_U || ArgTypeKind == BuiltinType::Char_S)
+      return false;
+  }
+
   if (ArgKind == ConversionSpecifier::Kind::uArg)
     return ArgType->isUnsignedIntegerType();
   return ArgType->isSignedIntegerType();

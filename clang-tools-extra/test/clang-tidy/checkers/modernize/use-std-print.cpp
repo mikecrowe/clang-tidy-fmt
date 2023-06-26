@@ -162,15 +162,21 @@ void printf_integer_d() {
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
   // CHECK-FIXES: std::println("Integer {:d} from bool", b);
 
-  // The 'd' is always necessary since otherwise the parameter will be formatted as a character
+  // The 'd' is always necessary if we pass a char since otherwise the
+  // parameter will be formatted as a character. In StrictMode, the
+  // cast is always necessary to maintain the printf behaviour since
+  // char may be unsigned, but this also means that the 'd' is not
+  // necessary.
   const char c = 'A';
   printf("Integers %d %hhd from char\n", c, c);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
-  // CHECK-FIXES: std::println("Integers {:d} {:d} from char", c, c);
+  // CHECK-FIXES-NOTSTRICT: std::println("Integers {:d} {:d} from char", c, c);
+  // CHECK-FIXES-STRICT: std::println("Integers {} {} from char", static_cast<signed char>(c), static_cast<signed char>(c));
 
   printf("Integers %i %hhi from char\n", c, c);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
-  // CHECK-FIXES: std::println("Integers {:d} {:d} from char", c, c);
+  // CHECK-FIXES-NOTSTRICT: std::println("Integers {:d} {:d} from char", c, c);
+  // CHECK-FIXES-STRICT: std::println("Integers {} {} from char", static_cast<signed char>(c), static_cast<signed char>(c));
 
   const signed char sc = 'A';
   printf("Integers %d %hhd from signed char\n", sc, sc);
@@ -499,11 +505,13 @@ void fprintf_integer() {
 
   fprintf(stderr, "Integer %i from char\n", 'A');
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'fprintf' [modernize-use-std-print]
-  // CHECK-FIXES: std::println(stderr, "Integer {:d} from char", 'A');
+  // CHECK-FIXES-NOTSTRICT: std::println(stderr, "Integer {:d} from char", 'A');
+  // CHECK-FIXES-STRICT: std::println(stderr, "Integer {} from char", static_cast<signed char>('A'));
 
   fprintf(stderr, "Integer %d from char\n", 'A');
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'fprintf' [modernize-use-std-print]
-  // CHECK-FIXES: std::println(stderr, "Integer {:d} from char", 'A');
+  // CHECK-FIXES-NOTSTRICT: std::println(stderr, "Integer {:d} from char", 'A');
+  // CHECK-FIXES-STRICT: std::println(stderr, "Integer {} from char", static_cast<signed char>('A'));
 }
 
 void printf_char() {
