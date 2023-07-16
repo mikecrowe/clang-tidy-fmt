@@ -1121,10 +1121,20 @@ void printf_precision() {
   // CHECK-FIXES: std::println("Hello {:.5}", 'G');
 }
 
-void printf_field_width_and_precision() {
+void printf_field_width_and_precision(const std::string &s1, const std::string &s2, const std::string &s3)
+{
   printf("width only:%*d width and precision:%*.*f precision only:%.*f\n", 3, 42, 4, 2, 3.14159265358979323846, 5, 2.718);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
   // CHECK-FIXES: std::println("width only:{:{}} width and precision:{:{}.{}f} precision only:{:.{}f}", 42, 3, 3.14159265358979323846, 4, 2, 2.718, 5);
+
+  const unsigned int ui1 = 42, ui2 = 43, ui3 = 44;
+  printf("casts width only:%*d width and precision:%*.*d precision only:%.*d\n", 3, ui1, 4, 2, ui2, 5, ui3);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
+  // CHECK-FIXES: std::println("casts width only:{:{}} width and precision:{:{}.{}f} precision only:{:.{}f}", static_cast<int>(ui1), 3, static_cast<int>(ui2), 4, 2, static_cast<int>(ui3), 5);
+
+  printf("c_str removal width only:%*s width and precision:%*.*s precision only:%.*s\n", 3, s1.c_str(), 4, 2, s2.c_str(), 5, s3.c_str());
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
+  // CHECK-FIXES: std::println("c_str removal width only:{:<{}} width and precision:{:<{}.{}} precision only:{:.{}}", s1, 3, s2, 4, 2, s3, 5);
 
   printf("width and precision positional:%1$*2$.*3$f after\n", 3.14159265358979323846, 4, 2);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
@@ -1134,6 +1144,10 @@ void printf_field_width_and_precision() {
   printf("width only:%3$*1$d width and precision:%4$*1$.*2$f precision only:%5$.*2$f\n", width, precision, 42, 3.1415926, 2.718);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
   // CHECK-FIXES: std::println("width only:{2:{0}} width and precision:{3:{0}.{1}f} precision only:{4:.{1}f}", width, precision, 42, 3.1415926, 2.718);
+
+  printf("c_str removal width only:%3$*1$s width and precision:%4$*1$.*2$s precision only:%5$.*2$s\n", width, precision, s1.c_str(), s2.c_str(), s3.c_str());
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
+  // CHECK-FIXES: std::println("c_str removal width only:{2:>{0}} width and precision:{3:>{0}.{1}} precision only:{4:.{1}}", width, precision, s1, s2, s3);
 }
 
 void fprintf_field_width_and_precision() {
