@@ -50,6 +50,7 @@ private:
   const unsigned NumArgs;
   unsigned ArgsOffset;
   const LangOptions &LangOpts;
+  bool ForceArgumentIndices = false;
   std::string ConversionNotPossibleReason;
   bool FormatStringNeededRewriting = false;
   bool UsePrintNewlineFunction = false;
@@ -66,11 +67,6 @@ private:
   /// Casts to be used to wrap arguments to retain printf compatibility.
   std::vector<std::tuple<const Expr *, std::string>> ArgFixes;
   std::vector<clang::ast_matchers::BoundNodes> ArgCStrRemovals;
-
-  // Argument rotations to cope with the fact that std::print puts the value to
-  // be formatted first and the width and precision afterwards whereas printf
-  // puts the width and preicision first.
-  std::vector<std::tuple<unsigned, unsigned>> ArgRotates;
 
   void emitAlignment(const PrintfSpecifier &FS, std::string &FormatSpec);
   void emitSign(const PrintfSpecifier &FS, std::string &FormatSpec);

@@ -195,6 +195,47 @@ static bool castMismatchedIntegerTypes(const CallExpr *Call, bool StrictMode) {
   return false;
 }
 
+namespace {
+class NeedsArgumentIndicesCheck
+    : public clang::analyze_format_string::FormatStringHandler {
+public:
+  bool NeedsArgumentIndices = false;
+  bool HandlePrintfSpecifier(const PrintfSpecifier &FS,
+                             const char *StartSpecifier, unsigned SpecifierLen,
+                             const TargetInfo &Target) override;
+};
+
+bool NeedsArgumentIndicesCheck::HandlePrintfSpecifier(
+    const PrintfSpecifier &FS, const char *StartSpecifier,
+    unsigned SpecifierLen, const TargetInfo &Target) {
+  const OptionalAmount FieldWidth = FS.getFieldWidth();
+  const OptionalAmount FieldPrecision = FS.getPrecision();
+
+  if (FieldWidth.getHowSpecified() == OptionalAmount::Arg &&
+      !FieldWidth.usesPositionalArg())
+    NeedsArgumentIndices = true;
+  if (FieldPrecision.getHowSpecified() == OptionalAmount::Arg &&
+      !FieldPrecision.usesPositionalArg())
+    NeedsArgumentIndices = true;
+
+  llvm::dbgs() << "NeedsArgumentIndices=" << NeedsArgumentIndices << "\n";
+
+  // We can bail out if we already know that NeedsArgumentIndices is true.
+  return !NeedsArgumentIndices;
+}
+
+bool conversionNeedsArgumentIndices(ASTContext *Context,
+                                    const llvm::StringRef &PrintfFormatString,
+                                    const LangOptions &LangOpts) {
+  NeedsArgumentIndicesCheck Naic;
+  const bool IsFreeBsdkPrintf = false;
+  ParsePrintfString(Naic, PrintfFormatString.data(),
+                    PrintfFormatString.data() + PrintfFormatString.size(),
+                    LangOpts, Context->getTargetInfo(), IsFreeBsdkPrintf);
+  return Naic.NeedsArgumentIndices;
+}
+} // namespace
+
 FormatStringConverter::FormatStringConverter(ASTContext *ContextIn,
                                              const CallExpr *Call,
                                              unsigned FormatArgOffset,
@@ -218,6 +259,8 @@ FormatStringConverter::FormatStringConverter(ASTContext *ContextIn,
   StandardFormatString.reserve(PrintfFormatString.size() + EstimatedGrowth);
   StandardFormatString.push_back('\"');
 
+  ForceArgumentIndices =
+      conversionNeedsArgumentIndices(Context, PrintfFormatString, LangOpts);
   const bool IsFreeBsdkPrintf = false;
 
   using clang::analyze_format_string::ParsePrintfString;
@@ -299,7 +342,7 @@ void FormatStringConverter::emitFieldWidth(const PrintfSpecifier &FS,
       break;
     case OptionalAmount::Arg:
       FormatSpec.push_back('{');
-      if (FieldWidth.usesPositionalArg()) {
+      if (FieldWidth.usesPositionalArg() || ForceArgumentIndices) {
         // std::format argument identifiers are zero-based, whereas printf
         // ones are one based.
         assert(FieldWidth.getPositionalArgIndex() > 0U);
@@ -326,7 +369,7 @@ void FormatStringConverter::emitPrecision(const PrintfSpecifier &FS,
   case OptionalAmount::Arg:
     FormatSpec.push_back('.');
     FormatSpec.push_back('{');
-    if (FieldPrecision.usesPositionalArg()) {
+    if (FieldPrecision.usesPositionalArg() || ForceArgumentIndices) {
       // std::format argument identifiers are zero-based, whereas printf
       // ones are one based.
       assert(FieldPrecision.getPositionalArgIndex() > 0U);
@@ -338,22 +381,6 @@ void FormatStringConverter::emitPrecision(const PrintfSpecifier &FS,
   case OptionalAmount::Invalid:
     break;
   }
-}
-
-void FormatStringConverter::maybeRotateArguments(const PrintfSpecifier &FS) {
-  unsigned ArgCount = 0;
-  const OptionalAmount FieldWidth = FS.getFieldWidth();
-  const OptionalAmount FieldPrecision = FS.getPrecision();
-
-  if (FieldWidth.getHowSpecified() == OptionalAmount::Arg &&
-      !FieldWidth.usesPositionalArg())
-    ++ArgCount;
-  if (FieldPrecision.getHowSpecified() == OptionalAmount::Arg &&
-      !FieldPrecision.usesPositionalArg())
-    ++ArgCount;
-
-  if (ArgCount)
-    ArgRotates.emplace_back(FS.getArgIndex() + ArgsOffset, ArgCount);
 }
 
 void FormatStringConverter::emitStringArgument(const Expr *Arg) {
@@ -524,7 +551,7 @@ bool FormatStringConverter::convertArgument(const PrintfSpecifier &FS,
 
   StandardFormatString.push_back('{');
 
-  if (FS.usesPositionalArg()) {
+  if (FS.usesPositionalArg() || ForceArgumentIndices) {
     // std::format argument identifiers are zero-based, whereas printf ones
     // are one based.
     assert(FS.getPositionalArgIndex() > 0U);
@@ -547,7 +574,6 @@ bool FormatStringConverter::convertArgument(const PrintfSpecifier &FS,
 
   emitFieldWidth(FS, FormatSpec);
   emitPrecision(FS, FormatSpec);
-  maybeRotateArguments(FS);
 
   if (!emitType(FS, Arg, FormatSpec))
     return false;
@@ -701,23 +727,6 @@ void FormatStringConverter::applyFixes(DiagnosticBuilder &Diag,
               : tooling::fixit::getText(*Arg, *Context).str();
     if (!ArgText.empty())
       Diag << FixItHint::CreateReplacement(Call->getSourceRange(), ArgText);
-  }
-
-  // ArgCount is one less than the number of arguments to be rotated.
-  for (auto [ValueArgIndex, ArgCount] : ArgRotates) {
-    assert(ValueArgIndex < NumArgs);
-    assert(ValueArgIndex > ArgCount);
-
-    // First move the value argument to the right place.
-    Diag << tooling::fixit::createReplacement(*Args[ValueArgIndex - ArgCount],
-                                              *Args[ValueArgIndex], *Context);
-
-    // Now shift down the field width and precision (if either are present) to
-    // accommodate it.
-    for (size_t Offset = 0; Offset < ArgCount; ++Offset)
-      Diag << tooling::fixit::createReplacement(
-          *Args[ValueArgIndex - Offset], *Args[ValueArgIndex - Offset - 1],
-          *Context);
   }
 }
 } // namespace clang::tidy::utils
