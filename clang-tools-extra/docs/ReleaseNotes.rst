@@ -211,6 +211,15 @@ New checks
   replacing with ``starts_with`` when the method exists in the class. Notably,
   this will work with ``std::string`` and ``std::string_view``.
 
+- New :doc:`modernize-use-std-format
+  <clang-tidy/checks/modernize/use-std-format>` check.
+
+  Converts calls to ``absl::StrFormat``, or other functions via
+  configuration options, to C++20's ``std::format``, or another function
+  via a configuration option, modifying the format string appropriately and
+  removing now-unnecessary calls to ``std::string::c_str()`` and
+  ``std::string::data()``.
+
 - New :doc:`modernize-use-std-numbers
   <clang-tidy/checks/modernize/use-std-numbers>` check.
 
