@@ -26,6 +26,7 @@ add_clang_library(clangTidyModernizeModule
   ReturnBracedInitListCheck.cpp
   ShrinkToFitCheck.cpp
   TraceFormatCheck.cpp
+  TraceFormatNoNewlineCheck.cpp
   TypeTraitsCheck.cpp
   UnaryStaticAssertCheck.cpp
   UseAutoCheck.cpp
