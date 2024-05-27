@@ -256,3 +256,20 @@ void bar() {
   Foo.func2((Str.c_str()));
 }
 } // namespace PR45286
+
+class AlwaysLog {
+public:
+  template <typename... Args>
+  void operator()(const char *fmt, Args &&...args) {
+  }
+};
+
+AlwaysLog LOG;
+
+void test_log(const std::string &s1, const std::string &s2)
+{
+  LOG("One:%s Two:%s\n", s1.c_str(), s2.c_str());
+  // CHECK-MESSAGES: [[@LINE-1]]:26: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-MESSAGES: [[@LINE-2]]:38: warning: redundant call to 'c_str' [readability-redundant-string-cstr]
+  // CHECK-FIXES: LOG("One:%s Two:%s\n", s1, s2);
+}

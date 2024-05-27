@@ -165,6 +165,20 @@ void RedundantStringCStrCheck::registerMatchers(
                                                    parmVarDecl()))),
         this);
   }
+
+  const auto AlwaysLogClassExpr = expr(hasType(hasCanonicalType(
+      hasDeclaration(cxxRecordDecl(isSameOrDerivedFrom("::AlwaysLog"))))));
+  const auto NeverLogClassExpr = expr(hasType(hasCanonicalType(
+      hasDeclaration(cxxRecordDecl(isSameOrDerivedFrom("::NeverLog"))))));
+
+  Finder->addMatcher(
+      traverse(
+          TK_AsIs,
+          cxxOperatorCallExpr(
+              hasOverloadedOperatorName("()"),
+              hasArgument(0, anyOf(AlwaysLogClassExpr, NeverLogClassExpr)),
+              forEachArgumentWithParam(StringCStrCallExpr, parmVarDecl()))),
+      this);
 }
 
 void RedundantStringCStrCheck::check(const MatchFinder::MatchResult &Result) {
