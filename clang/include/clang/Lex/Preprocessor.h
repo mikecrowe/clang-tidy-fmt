@@ -2464,8 +2464,11 @@ private:
   /// macro name.
   void updateModuleMacroInfo(const IdentifierInfo *II, ModuleMacroInfo &Info);
 
+  public:
   DefMacroDirective *AllocateDefMacroDirective(MacroInfo *MI,
                                                SourceLocation Loc);
+  private:
+
   UndefMacroDirective *AllocateUndefMacroDirective(SourceLocation UndefLoc);
   VisibilityMacroDirective *AllocateVisibilityMacroDirective(SourceLocation Loc,
                                                              bool isPublic);
@@ -2564,8 +2567,10 @@ private:
   /// If an identifier token is read that is to be expanded as a macro, handle
   /// it and return the next token as 'Tok'.  If we lexed a token, return true;
   /// otherwise the caller should lex again.
+public:
   bool HandleMacroExpandedIdentifier(Token &Identifier, const MacroDefinition &MD);
 
+private:
   /// Cache macro expanded tokens for TokenLexers.
   //
   /// Works like a stack; a TokenLexer adds the macro expanded tokens that is

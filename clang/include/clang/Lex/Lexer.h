@@ -745,6 +745,14 @@ private:
                               tok::TokenKind Kind);
   bool LexRawStringLiteral   (Token &Result, const char *CurPtr,
                               tok::TokenKind Kind);
+  void processExtractionField(std::vector<Token> &tokens, const char *litStart,
+                              std::string &lit);
+  Token processExpression    (std::vector<Token> &tokens);
+  Token processNested        (std::vector<Token> &tokens);
+  void processNestedParenthesis(std::vector<Token> &tokens, const Token &token,
+                              tok::TokenKind closer);
+  bool LexFLiteral(Token &Result, const char *CurPtr,
+                              tok::TokenKind Kind);
   bool LexAngledStringLiteral(Token &Result, const char *CurPtr);
   bool LexCharConstant       (Token &Result, const char *CurPtr,
                               tok::TokenKind Kind);

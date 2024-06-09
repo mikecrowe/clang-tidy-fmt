@@ -2338,6 +2338,307 @@ bool Lexer::LexRawStringLiteral(Token &Result, const char *CurPtr,
   return true;
 }
 
+
+// Process and extraction field in a f-literal. Add the tokens of the expresion(s) to tokens, and add the literal fragments to lit,
+// if any. Start at BufferPtr, and leave it after the field, i.e. after the } of the extraction field. litstart is the position after the
+// starting " of the literal or the } of the previous extraction field.
+void clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char* litStart, std::string& lit) {
+    // Add the comma that should go before each extracted expression.    
+    Token cTok;
+    cTok.startToken();
+    cTok.setKind(tok::comma);
+    cTok.setLocation(getSourceLocation());
+    tokens.push_back(cTok);
+
+    const char* exprStart = BufferPtr;
+    Token terminator = processExpression(tokens);     // Parse the part before the colon or }, returning the : or } token itself.
+
+    // Handle the extra feature that an expression ending with = is its own label (as in Python). No expression ending with =
+    // is valid anyway.
+    if (tokens.back().getKind() == tok::equal) {
+        lit.append(litStart, BufferPtr);      // Add entire expression including the = and any spaces after that to the literal.
+        tokens.pop_back();      // Remove the =
+    }
+    else {
+        lit.append(litStart, exprStart);      // Add entire expression including the = and any spaces after that to the literal.
+    }
+
+    if (terminator.getKind() != tok::colon) {
+        assert(terminator.getKind() == tok::r_brace);
+        lit.push_back('}');
+        return;
+    }
+
+    lit.push_back(':');
+
+    // If : check for nested fields in the format-spec. This works character by character.
+    auto toLit = [&] {
+        lit += *BufferPtr++;
+    };
+
+    while (*BufferPtr != '}') {
+        if (*BufferPtr == '{') {    // Nested field starts
+            toLit();
+
+            // Add a comma in the token stream before the expression tokens.
+            cTok.setLocation(getSourceLocation());
+            tokens.push_back(cTok);
+            Token terminator = processExpression(tokens);
+            if (terminator.getKind() != tok::r_brace)   // Colon not allowed inside nested expression-field.
+                Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1;     // TODO: new diagnostic: formatting spec for dynamic format spec not allowed.
+
+            lit.push_back('}');  // The } of the dynamic format
+        } 
+        else
+          toLit();      // Transfer other formatting argument char to the resulting string.
+    }
+    toLit();    // Transfer the final } and advance PufferPtr.
+}
+
+Token clang::Lexer::processExpression(std::vector<Token>& tokens)
+{
+    while (true) {
+        Token token = processNested(tokens);
+        switch (token.getKind()) {
+        case tok::r_paren:
+            Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1; // TODO: new diagnostic: "Extraneous ) in expression-field"
+            break;
+
+        case tok::r_square:
+            Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1;     // TODO: new diagnostic: "Extraneous ] in expression-field"
+            break;
+
+        case tok::question:
+          tokens.push_back(token);
+            Token terminator = processExpression(tokens);
+            if (terminator.getKind() != tok::colon)
+              Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1; // TODO: new diagnostic: "Mismatched ? in expression-field"
+
+            tokens.push_back(terminator);
+            return processExpression(tokens);
+
+        case tok::r_brace:
+        case tok::colon:
+            return token;
+
+        case tok::coloncolon: {
+            // If a coloncolon token is not followed by an identifier it is to
+            // be interpreted as the colon starting the format spec anyway.
+            const char *save =
+                BufferPtr - 1; // Points to the second of colons.
+            Token ident;
+            while (!Lex(ident))
+                ;
+            
+            if (ident.getKind() != tok::identifier) {
+                BufferPtr = save;
+
+                Token cTok;
+                cTok.startToken();
+                cTok.setKind(tok::colon);
+                return cTok;
+            }
+            tokens.push_back(token);
+            tokens.push_back(ident);
+            break;
+        }
+
+        default:
+          tokens.push_back(token);
+        }
+    }
+}
+
+// Pass over any number of matched parentheses, pushing all the tokens thus passed over.
+// Return the first token outside any matched parentheses.
+Token clang::Lexer::processNested(std::vector<Token>& tokens)
+{
+    while (true) {
+        Token token;
+        while(!Lex(token))
+            ;
+        switch (token.getKind()) {
+        case tok::l_paren:
+          processNestedParenthesis(tokens, token, tok::r_paren);
+            break;
+        case tok::l_square:
+          processNestedParenthesis(tokens, token, tok::r_square);
+            break;
+        case tok::l_brace:
+          processNestedParenthesis(tokens, token, tok::r_brace);
+            break;
+
+        default:
+            return token;
+        }
+    }
+}
+
+// Pass over a certain type of parenthesis, indicated by the expected closer token kind.
+void clang::Lexer::processNestedParenthesis(std::vector<Token>& tokens, const Token &token, tok::TokenKind closer) {
+    tokens.push_back(token);
+    while (true) {
+        Token next = processNested(tokens);
+        tokens.push_back(next);
+        if (next.getKind() == closer)
+            return;
+
+        if (next.getKind() == tok::r_paren || next.getKind() == tok::r_square || next.getKind() == tok::r_brace)
+            Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1; // TODO: new diagnostic: "Mismatched {}. A {} was found where a {} was expected.", introducers[intIx], c, terminators[intIx]));
+    }
+}
+
+
+bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind Kind) {
+  const char *AfterQuote = CurPtr;
+  // Does this string contain the \0 character?
+  const char *NulCharacter = nullptr;
+
+  if (PP == nullptr)
+    return LexStringLiteral(Result, CurPtr, Kind);
+
+  if (!isLexingRawMode() &&
+      (Kind == tok::utf8_string_literal || Kind == tok::utf16_string_literal ||
+       Kind == tok::utf32_string_literal))
+    Diag(BufferPtr, LangOpts.CPlusPlus ? diag::warn_cxx98_compat_unicode_literal
+                                       : diag::warn_c99_compat_unicode_literal);
+
+  // As the string literal is no longer the same as in the source code we must save it into this variable
+  // until the right " is found. Then we create a token around it, with its source location set to the start of the original literal
+  // and push this into the MacroInfo after the initial std::format( sequence. To handle the life time of the string contents
+  // we use the BP allocator function.
+  std::string resultingLiteral = "\"";
+  
+  // Collect all tokens in this vector until we know how many we have, i.e. at the end.
+  std::vector<Token> tokens;
+
+  // Form the prefix tokens.
+
+  Token ccTok;
+  ccTok.startToken();
+  ccTok.setKind(tok::coloncolon);
+  ccTok.setLocation(getSourceLocation());
+  tokens.push_back(ccTok);
+
+  Token stdTok;
+  stdTok.startToken();
+  stdTok.setLocation(getSourceLocation());
+  stdTok.setIdentifierInfo(PP->getIdentifierInfo("std"));
+  stdTok.setKind(tok::identifier);
+  tokens.push_back(stdTok);
+
+  tokens.push_back(ccTok);
+
+  Token fmtTok;
+  fmtTok.startToken();
+  fmtTok.setLocation(getSourceLocation());
+  fmtTok.setIdentifierInfo(PP->getIdentifierInfo("format"));
+  fmtTok.setKind(tok::identifier);
+  tokens.push_back(fmtTok);
+
+  Token lpTok;
+  lpTok.startToken();
+  lpTok.setLocation(getSourceLocation());
+  lpTok.setKind(tok::l_paren);
+  tokens.push_back(lpTok);
+
+  const size_t literalPos = tokens.size();      // 4
+
+  tokens.push_back(Token());        // Placeholder for the literal.
+
+  const char* litStart = CurPtr;
+  const char *litPartStart = CurPtr;
+  char C = getAndAdvanceChar(CurPtr, Result);
+
+  while (C != '"') {
+    // Skip escaped characters.  Escaped newlines will already be processed by
+    // getAndAdvanceChar.
+    if (C == '\\')
+      C = getAndAdvanceChar(CurPtr, Result);
+
+    if (C == '\n' || C == '\r' ||              // Newline.
+        (C == 0 && CurPtr - 1 == BufferEnd)) { // End of file.
+      if (!isLexingRawMode() && !LangOpts.AsmPreprocessor)
+        Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1;
+      FormTokenWithChars(Result, CurPtr - 1, tok::unknown);
+      return true;
+    }
+
+    // Embyrotic implementation which just removes everything between { and }
+    // Note: {{ a quoted brace, We need to keep both as the resulting literal is still input to std::format!
+    if (C == '{' && *CurPtr != '{') {
+      BufferPtr = CurPtr;
+      processExtractionField(tokens, litPartStart, resultingLiteral);
+      CurPtr = BufferPtr;
+      litPartStart = CurPtr;
+    }
+
+    if (C == 0) {
+      if (isCodeCompletionPoint(CurPtr - 1)) {
+        if (ParsingFilename)
+          codeCompleteIncludedFile(AfterQuote, CurPtr - 1, /*IsAngled=*/false);
+        else
+          PP->CodeCompleteNaturalLanguage();
+        FormTokenWithChars(Result, CurPtr - 1, tok::unknown);
+        cutOffLexing();
+        return true;
+      }
+
+      NulCharacter = CurPtr - 1;
+    }
+    C = getAndAdvanceChar(CurPtr, Result);
+  }
+
+  // f literals can't be combined with ud suffixes, so don't parse such.
+
+  // If a nul character existed in the string, warn about it.
+  if (NulCharacter && !isLexingRawMode())
+    Diag(NulCharacter, diag::null_in_char_or_string) << 1;
+  
+  // If we are in C++11, lex the optional ud-suffix. This is probably not useful for f literals as stD::format would not accept the result of the customer defined operator, which is
+  // no longer a string literal.
+  if (LangOpts.CPlusPlus)
+    CurPtr = LexUDSuffix(Result, CurPtr, true);
+
+  // COmplete the resulting literal by adding the bit after the last }
+  resultingLiteral.append(litPartStart, CurPtr);
+
+  // Fill in the literalPos token with the remaining string. But to keep its contents first allocate
+  // using the bumpAllocator from PP.
+  char *lit = new (PP->getPreprocessorAllocator()) char[resultingLiteral.size() + 1];
+  memcpy(lit, resultingLiteral.c_str(), resultingLiteral.size() + 1);
+
+  Token rpTok;
+  rpTok.startToken();
+  rpTok.setKind(tok::r_paren);
+  rpTok.setLocation(getSourceLocation(CurPtr));
+  rpTok.setLength(1);
+  tokens.push_back(rpTok);
+
+  SourceLocation litLoc = getSourceLocation(litStart, CurPtr - BufferPtr);
+  Token &litTok = tokens[literalPos];
+  litTok.startToken();
+  litTok.setKind(Kind);
+  litTok.setLocation(getSourceLocation(litStart));
+  litTok.setLiteralData(lit);
+  litTok.setKind(Kind);
+  litTok.setLength(resultingLiteral.size());
+
+  // The completed lexing is represented by a MacroInfo object which is pushed
+  // onto the macro expansion stack This expansion consists of std::format("...
+  // the remaining string ...", ...the extracted argument tokens...)
+ 
+  MacroInfo *mi = PP->AllocateMacroInfo(litLoc);
+  mi->setTokens(tokens, PP->getPreprocessorAllocator());
+
+  DefMacroDirective *defMD = PP->AllocateDefMacroDirective(mi, litLoc);
+
+  MacroDefinition md(defMD, {}, false);
+  BufferPtr = CurPtr;
+  return PP->HandleMacroExpandedIdentifier(tokens[3], md); // Token here must be an identifier. tokens[3] is "format".
+}
+
+
 /// LexAngledStringLiteral - Lex the remainder of an angled string literal,
 /// after having lexed the '<' character.  This is used for #include filenames.
 bool Lexer::LexAngledStringLiteral(Token &Result, const char *CurPtr) {
@@ -3961,6 +4262,21 @@ LexStart:
     // treat R like the start of an identifier.
     return LexIdentifierContinue(Result, CurPtr);
 
+  case 'f':
+    // Notify MIOpt that we read a non-whitespace/non-comment token.
+    MIOpt.ReadToken();
+
+    if (LangOpts.CPlusPlus11) {
+      Char = getCharAndSize(CurPtr, SizeTmp);
+
+      if (Char == '"')
+        // LexFLiteral pushes a MacroInfo object containing everything except the std of the std::format( prefix which is set in Result instead.
+        return LexFLiteral(Result, ConsumeChar(CurPtr, SizeTmp, Result), tok::string_literal);
+    }
+
+    // treat R like the start of an identifier.
+    return LexIdentifierContinue(Result, CurPtr);
+
   case 'L':   // Identifier (Loony) or wide literal (L'x' or L"xyz").
     // Notify MIOpt that we read a non-whitespace/non-comment token.
     MIOpt.ReadToken();
@@ -3991,7 +4307,7 @@ LexStart:
   case 'H': case 'I': case 'J': case 'K':    /*'L'*/case 'M': case 'N':
   case 'O': case 'P': case 'Q':    /*'R'*/case 'S': case 'T':    /*'U'*/
   case 'V': case 'W': case 'X': case 'Y': case 'Z':
-  case 'a': case 'b': case 'c': case 'd': case 'e': case 'f': case 'g':
+  case 'a': case 'b': case 'c': case 'd': case 'e': case 'g':
   case 'h': case 'i': case 'j': case 'k': case 'l': case 'm': case 'n':
   case 'o': case 'p': case 'q': case 'r': case 's': case 't':    /*'u'*/
   case 'v': case 'w': case 'x': case 'y': case 'z':
