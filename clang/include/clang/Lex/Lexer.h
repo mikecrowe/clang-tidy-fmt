@@ -747,7 +747,7 @@ private:
                               tok::TokenKind Kind);
   void processExtractionField(std::vector<Token> &tokens, const char *litStart,
                               std::string &lit);
-  Token processExpression    (std::vector<Token> &tokens);
+  Token processExpression    (std::vector<Token> &tokens, bool allowComma);
   Token processNested        (std::vector<Token> &tokens);
   void processNestedParenthesis(std::vector<Token> &tokens, const Token &token,
                               tok::TokenKind closer);

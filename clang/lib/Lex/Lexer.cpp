@@ -2351,12 +2351,14 @@ void clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char
     tokens.push_back(cTok);
 
     const char* exprStart = BufferPtr;
-    Token terminator = processExpression(tokens);     // Parse the part before the colon or }, returning the : or } token itself.
+    Token terminator = processExpression(tokens, false);     // Parse the part before the colon or }, returning the : or } token itself.
 
     // Handle the extra feature that an expression ending with = is its own label (as in Python). No expression ending with =
     // is valid anyway.
     if (tokens.back().getKind() == tok::equal) {
-        lit.append(litStart, BufferPtr);      // Add entire expression including the = and any spaces after that to the literal.
+        lit.append(litStart, exprStart - 1);     // Exclude the { which is to come after the label
+        lit.append(exprStart, BufferPtr - 1);    // Add entire expression including the = and any spaces after that to the literal.
+        lit += "{";                              // Add the { after the = and any trailing spaces.
         tokens.pop_back();      // Remove the =
     }
     else {
@@ -2383,7 +2385,7 @@ void clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char
             // Add a comma in the token stream before the expression tokens.
             cTok.setLocation(getSourceLocation());
             tokens.push_back(cTok);
-            Token terminator = processExpression(tokens);
+            Token terminator = processExpression(tokens, false);
             if (terminator.getKind() != tok::r_brace)   // Colon not allowed inside nested expression-field.
                 Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1;     // TODO: new diagnostic: formatting spec for dynamic format spec not allowed.
 
@@ -2395,7 +2397,7 @@ void clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char
     toLit();    // Transfer the final } and advance PufferPtr.
 }
 
-Token clang::Lexer::processExpression(std::vector<Token>& tokens)
+Token clang::Lexer::processExpression(std::vector<Token>& tokens, bool allowComma)
 {
     while (true) {
         Token token = processNested(tokens);
@@ -2410,38 +2412,41 @@ Token clang::Lexer::processExpression(std::vector<Token>& tokens)
 
         case tok::question:
           tokens.push_back(token);
-            Token terminator = processExpression(tokens);
+            Token terminator = processExpression(tokens, true);     // Note: Comma allowed before : by the C++ grammar
             if (terminator.getKind() != tok::colon)
               Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1; // TODO: new diagnostic: "Mismatched ? in expression-field"
 
             tokens.push_back(terminator);
-            return processExpression(tokens);
+            return processExpression(tokens, false);
 
         case tok::r_brace:
         case tok::colon:
             return token;
 
         case tok::coloncolon: {
-            // If a coloncolon token is not followed by an identifier it is to
-            // be interpreted as the colon starting the format spec anyway.
-            const char *save =
-                BufferPtr - 1; // Points to the second of colons.
-            Token ident;
-            while (!Lex(ident))
-                ;
-            
-            if (ident.getKind() != tok::identifier) {
-                BufferPtr = save;
+          // If a coloncolon token is not followed by an identifier it is to
+          // be interpreted as the colon starting the format spec anyway.
+          const char *save = BufferPtr - 1; // Points to the second of colons.
+          Token ident;
+          while (!Lex(ident))
+            ;
 
-                Token cTok;
-                cTok.startToken();
-                cTok.setKind(tok::colon);
-                return cTok;
-            }
-            tokens.push_back(token);
-            tokens.push_back(ident);
-            break;
+          if (ident.getKind() != tok::identifier) {
+            BufferPtr = save;
+
+            Token cTok;
+            cTok.startToken();
+            cTok.setKind(tok::colon);
+            return cTok;
+          }
+          tokens.push_back(token);
+          tokens.push_back(ident);
+          break;
         }
+        case tok::comma:
+          if (!allowComma)
+            // Important to diagnose erroneous comma here as std::format allows extra expressions, which is ridiculous for f-literals as they can't be translated.
+            Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1; // TODO: new diagnostic: "comma in extraction-field. Comman is not allowed in assignment-expression."
 
         default:
           tokens.push_back(token);
