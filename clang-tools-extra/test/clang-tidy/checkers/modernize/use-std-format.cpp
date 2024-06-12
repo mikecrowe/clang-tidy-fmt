@@ -1,13 +1,18 @@
 // RUN: %check_clang_tidy \
 // RUN:   -std=c++20 %s modernize-use-std-format %t -- \
 // RUN:   -config="{CheckOptions: {StrictMode: true}}" \
-// RUN:   -- -isystem %clang_tidy_headers
+// RUN:   -- -isystem %clang_tidy_headers \
+// RUN:      -DPRI_CMDLINE_MACRO="\"%s\"" \
+// RUN:      -D__PRI_CMDLINE_MACRO="\"%s\""
 // RUN: %check_clang_tidy \
 // RUN:   -std=c++20 %s modernize-use-std-format %t -- \
 // RUN:   -config="{CheckOptions: {StrictMode: false}}" \
-// RUN:   -- -isystem %clang_tidy_headers
+// RUN:   -- -isystem %clang_tidy_headers \
+// RUN:      -DPRI_CMDLINE_MACRO="\"%s\"" \
+// RUN:      -D__PRI_CMDLINE_MACRO="\"%s\""
 #include <string>
 // CHECK-FIXES: #include <format>
+#include <inttypes.h>
 
 namespace absl
 {
@@ -103,13 +108,6 @@ std::string StrFormat_macros() {
   // CHECK-MESSAGES: [[@LINE-1]]:13: warning: use 'std::format' instead of 'StrFormat' [modernize-use-std-format]
   // CHECK-FIXES: std::format("Hello {}", 42);
 
-  // The format string is replaced even though it comes from a macro, this
-  // behaviour is required so that that <inttypes.h> macros are replaced.
-#define FORMAT_STRING "Hello %s"
-  auto s2 = absl::StrFormat(FORMAT_STRING, 42);
-  // CHECK-MESSAGES: [[@LINE-1]]:13: warning: use 'std::format' instead of 'StrFormat' [modernize-use-std-format]
-  // CHECK-FIXES: std::format("Hello {}", 42);
-
   // Arguments that are macros aren't replaced with their value, even if they are rearranged.
 #define VALUE 3.14159265358979323846
 #define WIDTH 10
@@ -117,4 +115,41 @@ std::string StrFormat_macros() {
   auto s3 = absl::StrFormat("Hello %*.*f", WIDTH, PRECISION, VALUE);
   // CHECK-MESSAGES: [[@LINE-1]]:13: warning: use 'std::format' instead of 'StrFormat' [modernize-use-std-format]
   // CHECK-FIXES: std::format("Hello {:{}.{}f}", VALUE, WIDTH, PRECISION);
+
+  const uint64_t u64 = 42;
+  const uint32_t u32 = 32;
+  std::string s;
+
+  auto s4 = absl::StrFormat("Replaceable macro at end %" PRIu64, u64);
+  // CHECK-MESSAGES: [[@LINE-1]]:13: warning: use 'std::format' instead of 'StrFormat' [modernize-use-std-format]
+  // CHECK-FIXES: std::format("Replaceable macro at end {}", u64);
+
+  auto s5 = absl::StrFormat("Replaceable macros in middle %" PRIu64 " %" PRIu32 "\n", u64, u32);
+  // CHECK-MESSAGES: [[@LINE-1]]:13: warning: use 'std::format' instead of 'StrFormat' [modernize-use-std-format]
+  // CHECK-FIXES: std::format("Replaceable macros in middle {} {}\n", u64, u32);
+
+// These need PRI and __PRI prefixes so that the check get as far as looking for
+// where the macro comes from.
+#define PRI_FMT_MACRO "%s"
+#define __PRI_FMT_MACRO "%s"
+
+  auto s6 = absl::StrFormat("Unreplaceable macro at end " PRI_FMT_MACRO, s.c_str());
+  // CHECK-MESSAGES: [[@LINE-1]]:13: warning: unable to use 'std::format' instead of 'StrFormat' because format string contains unreplaceable macro 'PRI_FMT_MACRO' [modernize-use-std-format]
+
+  auto s7 = absl::StrFormat(__PRI_FMT_MACRO " Unreplaceable macro at beginning", s);
+  // CHECK-MESSAGES: [[@LINE-1]]:13: warning: unable to use 'std::format' instead of 'StrFormat' because format string contains unreplaceable macro '__PRI_FMT_MACRO' [modernize-use-std-format]
+
+  auto s8 = absl::StrFormat("Unreplacemable macro " PRI_FMT_MACRO " in the middle", s);
+  // CHECK-MESSAGES: [[@LINE-1]]:13: warning: unable to use 'std::format' instead of 'StrFormat' because format string contains unreplaceable macro 'PRI_FMT_MACRO' [modernize-use-std-format]
+
+  auto s9 = absl::StrFormat("First macro is replaceable %" PRIu64 " but second one is not " __PRI_FMT_MACRO, u64, s);
+  // CHECK-MESSAGES: [[@LINE-1]]:13: warning: unable to use 'std::format' instead of 'StrFormat' because format string contains unreplaceable macro '__PRI_FMT_MACRO' [modernize-use-std-format]
+
+  // Needs a PRI prefix so that we get as far as looking for where the macro comes from
+  auto s10 = absl::StrFormat(" macro from command line " PRI_CMDLINE_MACRO, s);
+  // CHECK-MESSAGES: [[@LINE-1]]:14: warning: unable to use 'std::format' instead of 'StrFormat' because format string contains unreplaceable macro 'PRI_CMDLINE_MACRO' [modernize-use-std-format]
+
+  // Needs a __PRI prefix so that we get as far as looking for where the macro comes from
+  auto s11 = absl::StrFormat(" macro from command line " __PRI_CMDLINE_MACRO, s);
+  // CHECK-MESSAGES: [[@LINE-1]]:14: warning: unable to use 'std::format' instead of 'StrFormat' because format string contains unreplaceable macro '__PRI_CMDLINE_MACRO' [modernize-use-std-format]
 }

@@ -396,7 +396,8 @@ Changes in existing checks
 - Improved :doc:`modernize-use-std-print
   <clang-tidy/checks/modernize/use-std-print>` check to not crash if the
   format string parameter of the function to be replaced is not of the
-  expected type.
+  expected type. Only macros starting with ``PRI`` and ``__PRI`` from
+  ``<inttypes.h>`` are now expanded in the format string.
 
 - Improved :doc:`modernize-use-using <clang-tidy/checks/modernize/use-using>`
   check by adding support for detection of typedefs declared on function level.
