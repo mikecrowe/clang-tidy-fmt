@@ -2428,8 +2428,7 @@ Token clang::Lexer::processExpression(std::vector<Token>& tokens, bool allowComm
           // be interpreted as the colon starting the format spec anyway.
           const char *save = BufferPtr - 1; // Points to the second of colons.
           Token ident;
-          while (!Lex(ident))
-            ;
+          PP->Lex(ident);
 
           if (ident.getKind() != tok::identifier) {
             BufferPtr = save;
@@ -2460,8 +2459,8 @@ Token clang::Lexer::processNested(std::vector<Token>& tokens)
 {
     while (true) {
         Token token;
-        while(!Lex(token))
-            ;
+      PP->Lex(token);
+
         switch (token.getKind()) {
         case tok::l_paren:
           processNestedParenthesis(tokens, token, tok::r_paren);
@@ -2632,15 +2631,14 @@ bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind
   // The completed lexing is represented by a MacroInfo object which is pushed
   // onto the macro expansion stack This expansion consists of std::format("...
   // the remaining string ...", ...the extracted argument tokens...)
- 
-  MacroInfo *mi = PP->AllocateMacroInfo(litLoc);
-  mi->setTokens(tokens, PP->getPreprocessorAllocator());
 
-  DefMacroDirective *defMD = PP->AllocateDefMacroDirective(mi, litLoc);
-
-  MacroDefinition md(defMD, {}, false);
   BufferPtr = CurPtr;
-  return PP->HandleMacroExpandedIdentifier(tokens[3], md); // Token here must be an identifier. tokens[3] is "format".
+
+  auto tokStore = std::make_unique<Token[]>(tokens.size());
+  std::copy(tokens.begin(), tokens.end(), tokStore.get());
+
+  PP->EnterTokenStream(std::move(tokStore), tokens.size(), true, false);
+  return false;  // Result has not been filled in.
 }
 
 
