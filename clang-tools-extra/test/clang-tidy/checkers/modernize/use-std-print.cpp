@@ -2,14 +2,14 @@
 // RUN:   -std=c++23 %s modernize-use-std-print %t -- \
 // RUN:   -config="{CheckOptions: {StrictMode: true}}" \
 // RUN:   -- -isystem %clang_tidy_headers -fexceptions \
-// RUN:      -DPRI_CMDLINE_MACRO="\"%s\"" \
-// RUN:      -D__PRI_CMDLINE_MACRO="\"%s\""
+// RUN:      -DPRI_CMDLINE_MACRO="\"s\"" \
+// RUN:      -D__PRI_CMDLINE_MACRO="\"s\""
 // RUN: %check_clang_tidy -check-suffixes=,NOTSTRICT \
 // RUN:   -std=c++23 %s modernize-use-std-print %t -- \
 // RUN:   -config="{CheckOptions: {StrictMode: false}}" \
 // RUN:   -- -isystem %clang_tidy_headers -fexceptions \
-// RUN:      -DPRI_CMDLINE_MACRO="\"%s\"" \
-// RUN:      -D__PRI_CMDLINE_MACRO="\"%s\""
+// RUN:      -DPRI_CMDLINE_MACRO="\"s\"" \
+// RUN:      -D__PRI_CMDLINE_MACRO="\"s\""
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -1578,8 +1578,8 @@ void p(S s1, S *s2)
 
 // These need PRI and __PRI prefixes so that the check gets as far as looking
 // for where the macro comes from.
-#define PRI_FMT_MACRO "%s"
-#define __PRI_FMT_MACRO "%s"
+#define PRI_FMT_MACRO "s"
+#define __PRI_FMT_MACRO "s"
 
 void macro_expansion(const char *s)
 {
@@ -1594,23 +1594,23 @@ void macro_expansion(const char *s)
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: use 'std::println' instead of 'printf' [modernize-use-std-print]
   // CHECK-FIXES: std::println("Replaceable macros in middle {} {}", u64, u32);
 
-  printf("Unreplaceable macro at end " PRI_FMT_MACRO, s);
+  printf("Unreplaceable macro at end %" PRI_FMT_MACRO, s);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: unable to use 'std::print' instead of 'printf' because format string contains unreplaceable macro 'PRI_FMT_MACRO' [modernize-use-std-print]
 
-  printf(PRI_FMT_MACRO " Unreplaceable macro at beginning", s);
+  printf(PRI_FMT_MACRO " Unreplaceable macro at beginning %s", s);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: unable to use 'std::print' instead of 'printf' because format string contains unreplaceable macro 'PRI_FMT_MACRO' [modernize-use-std-print]
 
-  printf("Unreplacemable macro " __PRI_FMT_MACRO " in the middle", s);
+  printf("Unreplacemable macro %" __PRI_FMT_MACRO " in the middle", s);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: unable to use 'std::print' instead of 'printf' because format string contains unreplaceable macro '__PRI_FMT_MACRO' [modernize-use-std-print]
 
-  printf("First macro is replaceable %" PRIu64 " but second one is not " PRI_FMT_MACRO, u64, s);
+  printf("First macro is replaceable %" PRIu64 " but second one is not %" PRI_FMT_MACRO, u64, s);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: unable to use 'std::print' instead of 'printf' because format string contains unreplaceable macro 'PRI_FMT_MACRO' [modernize-use-std-print]
 
   // Needs a PRI prefix so that we get as far as looking for where the macro comes from
-  printf(" macro from command line " PRI_CMDLINE_MACRO, s);
+  printf(" macro from command line %" PRI_CMDLINE_MACRO, s);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: unable to use 'std::print' instead of 'printf' because format string contains unreplaceable macro 'PRI_CMDLINE_MACRO' [modernize-use-std-print]
 
   // Needs a __PRI prefix so that we get as far as looking for where the macro comes from
-  printf(" macro from command line " __PRI_CMDLINE_MACRO, s);
+  printf(" macro from command line %" __PRI_CMDLINE_MACRO, s);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: unable to use 'std::print' instead of 'printf' because format string contains unreplaceable macro '__PRI_CMDLINE_MACRO' [modernize-use-std-print]
 }
