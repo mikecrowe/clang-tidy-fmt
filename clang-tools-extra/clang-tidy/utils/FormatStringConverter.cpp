@@ -215,7 +215,7 @@ FormatStringConverter::FormatStringConverter(
     return;
   }
 
-  if (const auto MaybeMacroName =
+  if (const std::optional<StringRef> MaybeMacroName =
           formatStringContainsUnreplaceableMacro(FormatExpr, SM, PP);
       MaybeMacroName) {
     conversionNotPossible(
