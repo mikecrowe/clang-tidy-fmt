@@ -152,4 +152,30 @@ std::string StrFormat_macros() {
   // Needs a __PRI prefix so that we get as far as looking for where the macro comes from
   auto s11 = absl::StrFormat(" macro from command line %" __PRI_CMDLINE_MACRO, s);
   // CHECK-MESSAGES: [[@LINE-1]]:14: warning: unable to use 'std::format' instead of 'StrFormat' because format string contains unreplaceable macro '__PRI_CMDLINE_MACRO' [modernize-use-std-format]
+
+  // We ought to be able to fix this since the macro surrounds the whole call
+  // and therefore can't change the format string independently. This is
+  // required to be able to fix calls inside Catch2 macros for example.
+#define SURROUND_ALL(x) x
+  auto s12 = SURROUND_ALL(absl::StrFormat("Macro surrounding entire invocation %" PRIu64, u64));
+  // CHECK-MESSAGES: [[@LINE-1]]:27: warning: use 'std::format' instead of 'StrFormat' [modernize-use-std-format]
+  // CHECK-FIXES: auto s12 = SURROUND_ALL(std::format("Macro surrounding entire invocation {}", u64));
+
+  // But having that surrounding macro shouldn't stop us ignoring an
+  // unreplaceable macro elsewhere.
+  auto s13 = SURROUND_ALL(absl::StrFormat("Macro surrounding entire invocation with unreplaceable macro %" PRI_FMT_MACRO, s));
+  // CHECK-MESSAGES: [[@LINE-1]]:27: warning: unable to use 'std::format' instead of 'StrFormat' because format string contains unreplaceable macro 'PRI_FMT_MACRO' [modernize-use-std-format]
+
+  // At the moment at least the check will replace occurrences where the
+  // function name is the result of expanding a macro.
+#define SURROUND_FUNCTION_NAME(x) absl:: x
+  auto s14 = SURROUND_FUNCTION_NAME(StrFormat)("Hello %d", 4442);
+  // CHECK-MESSAGES: [[@LINE-1]]:14: warning: use 'std::format' instead of 'StrFormat' [modernize-use-std-format]
+  // CHECK-FIXES: auto s14 = std::format("Hello {}", 4442);
+
+  // We can't safely fix occurrences where the macro may affect the format
+  // string differently in different builds.
+#define SURROUND_FORMAT(x) "!" x
+  auto s15 = absl::StrFormat(SURROUND_FORMAT("Hello %d"), 4443);
+  // CHECK-MESSAGES: [[@LINE-1]]:14: warning: unable to use 'std::format' instead of 'StrFormat' because format string contains unreplaceable macro 'SURROUND_FORMAT' [modernize-use-std-format]
 }

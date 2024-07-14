@@ -216,7 +216,7 @@ FormatStringConverter::FormatStringConverter(
   }
 
   if (const std::optional<StringRef> MaybeMacroName =
-          formatStringContainsUnreplaceableMacro(FormatExpr, SM, PP);
+          formatStringContainsUnreplaceableMacro(Call, FormatExpr, SM, PP);
       MaybeMacroName) {
     conversionNotPossible(
         ("format string contains unreplaceable macro '" + *MaybeMacroName + "'")
@@ -243,7 +243,17 @@ FormatStringConverter::FormatStringConverter(
 
 std::optional<StringRef>
 FormatStringConverter::formatStringContainsUnreplaceableMacro(
-    const StringLiteral *FormatExpr, SourceManager &SM, Preprocessor &PP) {
+    const CallExpr *Call, const StringLiteral *FormatExpr, SourceManager &SM,
+    Preprocessor &PP) {
+  // If a macro invocation surrounds the entire call then we don't want that to
+  // inhibit conversion. The whole format string will appear to come from that
+  // macro, as will the function call.
+  std::optional<StringRef> MaybeSurroundingMacroName;
+  if (SourceLocation BeginCallLoc = Call->getBeginLoc();
+      BeginCallLoc.isMacroID())
+    MaybeSurroundingMacroName =
+        Lexer::getImmediateMacroName(BeginCallLoc, SM, PP.getLangOpts());
+
   for (auto I = FormatExpr->tokloc_begin(), E = FormatExpr->tokloc_end();
        I != E; ++I) {
     const SourceLocation &TokenLoc = *I;
@@ -251,22 +261,25 @@ FormatStringConverter::formatStringContainsUnreplaceableMacro(
       const StringRef MacroName =
           Lexer::getImmediateMacroName(TokenLoc, SM, PP.getLangOpts());
 
-      // glibc uses __PRI64_PREFIX and __PRIPTR_PREFIX to define the prefixes
-      // for types that change size so we must look for multiple prefixes.
-      if (!MacroName.starts_with("PRI") && !MacroName.starts_with("__PRI"))
-        return MacroName;
+      if (MaybeSurroundingMacroName != MacroName) {
+        // glibc uses __PRI64_PREFIX and __PRIPTR_PREFIX to define the prefixes
+        // for types that change size so we must look for multiple prefixes.
+        if (!MacroName.starts_with("PRI") && !MacroName.starts_with("__PRI"))
+          return MacroName;
 
-      const SourceLocation TokenSpellingLoc = SM.getSpellingLoc(TokenLoc);
-      const OptionalFileEntryRef MaybeFileEntry =
-          SM.getFileEntryRefForID(SM.getFileID(TokenSpellingLoc));
-      if (!MaybeFileEntry)
-        return MacroName;
+        const SourceLocation TokenSpellingLoc = SM.getSpellingLoc(TokenLoc);
+        const OptionalFileEntryRef MaybeFileEntry =
+            SM.getFileEntryRefForID(SM.getFileID(TokenSpellingLoc));
+        if (!MaybeFileEntry)
+          return MacroName;
 
-      HeaderSearch &HS = PP.getHeaderSearchInfo();
-      // Check if the file is a system header
-      if (!isSystem(HS.getFileDirFlavor(*MaybeFileEntry)) ||
-          llvm::sys::path::filename(MaybeFileEntry->getName()) != "inttypes.h")
-        return MacroName;
+        HeaderSearch &HS = PP.getHeaderSearchInfo();
+        // Check if the file is a system header
+        if (!isSystem(HS.getFileDirFlavor(*MaybeFileEntry)) ||
+            llvm::sys::path::filename(MaybeFileEntry->getName()) !=
+                "inttypes.h")
+          return MacroName;
+      }
     }
   }
   return std::nullopt;

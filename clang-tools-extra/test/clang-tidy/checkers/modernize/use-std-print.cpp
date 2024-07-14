@@ -1613,4 +1613,30 @@ void macro_expansion(const char *s)
   // Needs a __PRI prefix so that we get as far as looking for where the macro comes from
   printf(" macro from command line %" __PRI_CMDLINE_MACRO, s);
   // CHECK-MESSAGES: [[@LINE-1]]:3: warning: unable to use 'std::print' instead of 'printf' because format string contains unreplaceable macro '__PRI_CMDLINE_MACRO' [modernize-use-std-print]
+
+  // We ought to be able to fix this since the macro surrounds the whole call
+  // and therefore can't change the format string independently. This is
+  // required to be able to fix calls inside Catch2 macros for example.
+#define SURROUND_ALL(x) x
+  SURROUND_ALL(printf("Macro surrounding entire invocation %" PRIu64, u64));
+  // CHECK-MESSAGES: [[@LINE-1]]:16: warning: use 'std::print' instead of 'printf' [modernize-use-std-print]
+  // CHECK-FIXES: SURROUND_ALL(std::print("Macro surrounding entire invocation {}", u64));
+
+  // But having that surrounding macro shouldn't stop us ignoring an
+  // unreplaceable macro elsewhere.
+  SURROUND_ALL(printf("Macro surrounding entire invocation with unreplaceable macro %" PRI_FMT_MACRO, s));
+  // CHECK-MESSAGES: [[@LINE-1]]:16: warning: unable to use 'std::print' instead of 'printf' because format string contains unreplaceable macro 'PRI_FMT_MACRO' [modernize-use-std-print]
+
+  // At the moment at least the check will replace occurrences where the
+  // function name is the result of expanding a macro.
+#define SURROUND_FUNCTION_NAME(x) x
+  SURROUND_FUNCTION_NAME(printf)("Hello %d", 4442);
+  // CHECK-MESSAGES: [[@LINE-1]]:26: warning: use 'std::print' instead of 'printf' [modernize-use-std-print]
+  // CHECK-FIXES: std::print("Hello {}", 4442);
+
+  // We can't safely fix occurrences where the macro may affect the format
+  // string differently in different builds.
+#define SURROUND_FORMAT(x) "!" x
+  printf(SURROUND_FORMAT("Hello %d"), 4443);
+  // CHECK-MESSAGES: [[@LINE-1]]:3: warning: unable to use 'std::print' instead of 'printf' because format string contains unreplaceable macro 'SURROUND_FORMAT' [modernize-use-std-print]
 }

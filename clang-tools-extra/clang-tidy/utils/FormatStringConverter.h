@@ -112,7 +112,8 @@ private:
   void appendFormatText(StringRef Text);
   void finalizeFormatText();
   static std::optional<StringRef>
-  formatStringContainsUnreplaceableMacro(const StringLiteral *FormatExpr,
+  formatStringContainsUnreplaceableMacro(const CallExpr *CallExpr,
+                                         const StringLiteral *FormatExpr,
                                          SourceManager &SM, Preprocessor &PP);
   bool conversionNotPossible(std::string Reason) {
     ConversionNotPossibleReason = std::move(Reason);
