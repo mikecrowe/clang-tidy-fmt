@@ -31,8 +31,8 @@ Macros starting with ``PRI`` and ``__PRI`` from `<inttypes.h>` are
 expanded, escaping is handled and adjacent strings are concatenated to form
 a single ``StringLiteral`` before the format string is converted. Use of
 any other macros in the format string will cause a warning message to be
-emitted and no conversion will be performed. The resultant converted format
-string will always be a single string literal.
+emitted and no conversion will be performed. The converted format string
+will always be a single string literal.
 
 The check doesn't do a bad job, but it's not perfect. In particular:
 
@@ -42,9 +42,9 @@ The check doesn't do a bad job, but it's not perfect. In particular:
 
 - At the point that the check runs, the AST contains a single
   ``StringLiteral`` for the format string where escapes have been expanded.
-  The check tries to put the escapes back, they may not be exactly as they
-  were written (e.g. ``"\x41\x0a"`` will become ``"A\n"`` and ``"ab" "cd"``
-  will become ``"abcd"``.)
+  The check tries to reconstruct escapes sequences, they may not be the
+  same as they were written (e.g. ``"\x41\x0a"`` will become ``"A\n"`` and
+  ``"ab" "cd"`` will become ``"abcd"``.)
 
 - It supports field widths, precision, positional arguments, leading zeros,
   leading ``+``, alignment and alternative forms.
