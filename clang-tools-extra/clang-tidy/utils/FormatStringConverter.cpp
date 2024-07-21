@@ -241,18 +241,59 @@ FormatStringConverter::FormatStringConverter(
   finalizeFormatText();
 }
 
+void debugLoc(const SourceLocation &TokenLoc, StringRef Name,
+              SourceManager &SM) {
+  llvm::dbgs() << "getImmediateExpansionRange for '" << Name << "': ";
+  SM.getImmediateExpansionRange(TokenLoc).getAsRange().print(llvm::dbgs(), SM);
+  llvm::dbgs() << "\n";
+
+  llvm::dbgs() << "getExpansionRange for '" << Name << "': ";
+  SM.getExpansionRange(TokenLoc).getAsRange().print(llvm::dbgs(), SM);
+  llvm::dbgs() << "\n";
+
+  llvm::dbgs() << "getTopMacroCaller for '" << Name << "': ";
+  SM.getTopMacroCallerLoc(TokenLoc).print(llvm::dbgs(), SM);
+  llvm::dbgs() << "\n";
+
+  llvm::dbgs() << "getImmediateMacroCallerLoc for '" << Name << "': ";
+  SM.getImmediateMacroCallerLoc(TokenLoc).print(llvm::dbgs(), SM);
+  llvm::dbgs() << "\n";
+
+  llvm::dbgs() << "getImmediateSpellingLoc for '" << Name << "': ";
+  SM.getImmediateSpellingLoc(TokenLoc).print(llvm::dbgs(), SM);
+  llvm::dbgs() << "\n";
+
+  llvm::dbgs() << "getFileLoc for '" << Name << "': ";
+  SM.getFileLoc(TokenLoc).print(llvm::dbgs(), SM);
+  llvm::dbgs() << "\n";
+
+  llvm::dbgs() << "\n";
+}
+
 std::optional<StringRef>
 FormatStringConverter::formatStringContainsUnreplaceableMacro(
     const CallExpr *Call, const StringLiteral *FormatExpr, SourceManager &SM,
     Preprocessor &PP) {
+
+  SM.dump();
+
   // If a macro invocation surrounds the entire call then we don't want that to
   // inhibit conversion. The whole format string will appear to come from that
   // macro, as will the function call.
   std::optional<StringRef> MaybeSurroundingMacroName;
+  std::optional<FileID> MaybeSurroundingMacroFileID;
   if (SourceLocation BeginCallLoc = Call->getBeginLoc();
-      BeginCallLoc.isMacroID())
+      BeginCallLoc.isMacroID()) {
     MaybeSurroundingMacroName =
         Lexer::getImmediateMacroName(BeginCallLoc, SM, PP.getLangOpts());
+    MaybeSurroundingMacroFileID = SM.getFileID(BeginCallLoc);
+
+    debugLoc(BeginCallLoc, "BeginCallLoc", SM);
+  }
+
+  // So that we don't need to return early and can show the TokenLoc location
+  // for every macro discovered in the format string.
+  std::optional<StringRef> Result;
 
   for (auto I = FormatExpr->tokloc_begin(), E = FormatExpr->tokloc_end();
        I != E; ++I) {
@@ -261,28 +302,32 @@ FormatStringConverter::formatStringContainsUnreplaceableMacro(
       const StringRef MacroName =
           Lexer::getImmediateMacroName(TokenLoc, SM, PP.getLangOpts());
 
+      if (SM.getFileID(TokenLoc) == MaybeSurroundingMacroFileID)
+        llvm::dbgs() << "TokenLoc has same FileID as call\n";
+      debugLoc(TokenLoc, MacroName, SM);
+
       if (MaybeSurroundingMacroName != MacroName) {
         // glibc uses __PRI64_PREFIX and __PRIPTR_PREFIX to define the prefixes
         // for types that change size so we must look for multiple prefixes.
         if (!MacroName.starts_with("PRI") && !MacroName.starts_with("__PRI"))
-          return MacroName;
+          Result = MacroName;
 
         const SourceLocation TokenSpellingLoc = SM.getSpellingLoc(TokenLoc);
         const OptionalFileEntryRef MaybeFileEntry =
             SM.getFileEntryRefForID(SM.getFileID(TokenSpellingLoc));
         if (!MaybeFileEntry)
-          return MacroName;
+          Result = MacroName;
 
         HeaderSearch &HS = PP.getHeaderSearchInfo();
         // Check if the file is a system header
         if (!isSystem(HS.getFileDirFlavor(*MaybeFileEntry)) ||
             llvm::sys::path::filename(MaybeFileEntry->getName()) !=
                 "inttypes.h")
-          return MacroName;
+          Result = MacroName;
       }
     }
   }
-  return std::nullopt;
+  return Result;
 }
 
 void FormatStringConverter::emitAlignment(const PrintfSpecifier &FS,
