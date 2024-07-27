@@ -42,8 +42,8 @@ The check doesn't do a bad job, but it's not perfect. In particular:
 
 - At the point that the check runs, the AST contains a single
   ``StringLiteral`` for the format string where escapes have been expanded.
-  The check tries to reconstruct escapes sequences, they may not be the
-  same as they were written (e.g. ``"\x41\x0a"`` will become ``"A\n"`` and
+  The check tries to reconstruct escape sequences, they may not be the same
+  as they were written (e.g. ``"\x41\x0a"`` will become ``"A\n"`` and
   ``"ab" "cd"`` will become ``"abcd"``.)
 
 - It supports field widths, precision, positional arguments, leading zeros,
