@@ -143,6 +143,11 @@ class Lexer : public PreprocessorLexer {
   /// True if this is the first time we're lexing the input file.
   bool IsFirstTimeLexingFile;
 
+  /// Don't print errors finding unterminated (non-raw) literal. Instead restore BufferPtr to
+  /// the first " found. This is set when lexing a nested expression as the unmatched " means that there was a syntax error
+  /// in the expression which is the error to be reported. In this case Lex must return an unknown Token.
+  bool IgnoreUnterminatedLiterals = false;
+
   // NewLinePtr - A pointer to new line character '\n' being lexed. For '\r\n',
   // it also points to '\n.'
   const char *NewLinePtr;
@@ -745,11 +750,11 @@ private:
                               tok::TokenKind Kind);
   bool LexRawStringLiteral   (Token &Result, const char *CurPtr,
                               tok::TokenKind Kind);
-  void processExtractionField(std::vector<Token> &tokens, const char *litStart,
+  bool processExtractionField(std::vector<Token> &tokens, const char *litStart,
                               std::string &lit);
   Token processExpression    (std::vector<Token> &tokens, bool allowComma);
-  Token processNested        (std::vector<Token> &tokens);
-  void processNestedParenthesis(std::vector<Token> &tokens, const Token &token,
+  int processNested        (std::vector<Token> &tokens, Token& token);
+  int processNestedParenthesis(std::vector<Token> &tokens, const Token &token,
                               tok::TokenKind closer);
   bool LexFLiteral(Token &Result, const char *CurPtr,
                               tok::TokenKind Kind);

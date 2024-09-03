@@ -2210,6 +2210,9 @@ bool Lexer::LexStringLiteral(Token &Result, const char *CurPtr,
 
     if (C == '\n' || C == '\r' ||             // Newline.
         (C == 0 && CurPtr-1 == BufferEnd)) {  // End of file.
+      if (IgnoreUnterminatedLiterals)
+          return true;      // Result still unknown. This is detected by extraction field processing.
+
       if (!isLexingRawMode() && !LangOpts.AsmPreprocessor)
         Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1;
       FormTokenWithChars(Result, CurPtr-1, tok::unknown);
@@ -2342,7 +2345,7 @@ bool Lexer::LexRawStringLiteral(Token &Result, const char *CurPtr,
 // Process and extraction field in a f-literal. Add the tokens of the expresion(s) to tokens, and add the literal fragments to lit,
 // if any. Start at BufferPtr, and leave it after the field, i.e. after the } of the extraction field. litstart is the position after the
 // starting " of the literal or the } of the previous extraction field.
-void clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char* litStart, std::string& lit) {
+bool clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char* litStart, std::string& lit) {
     // Add the comma that should go before each extracted expression.    
     Token cTok;
     cTok.startToken();
@@ -2354,8 +2357,10 @@ void clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char
     Token terminator = processExpression(tokens, false);     // Parse the part before the colon or }, returning the : or } token itself.
 
     // Handle the extra feature that an expression ending with = is its own label (as in Python). No expression ending with =
-    // is valid anyway.
-    if (tokens.back().getKind() == tok::equal) {
+    // is valid anyway. Well, this is not strictly true: &MyClass::operator= is a valid expression but for the greater good we ignore this.
+    // If anyone wants to emit this operator's address they can use a parenthesis. (Or we could specify that 'opewrator=' does not cáuse
+    // label output.
+    if (tokens.back().getKind() == tok::equal && (tokens.size() < 2 || tokens[tokens.size() - 2].getKind() != tok::kw_operator)) {
         lit.append(litStart, exprStart - 1);     // Exclude the { which is to come after the label
         lit.append(exprStart, BufferPtr - 1);    // Add entire expression including the = and any spaces after that to the literal.
         lit += "{";                              // Add the { after the = and any trailing spaces.
@@ -2365,10 +2370,10 @@ void clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char
         lit.append(litStart, exprStart);      // Add entire expression including the = and any spaces after that to the literal.
     }
 
-    if (terminator.getKind() != tok::colon) {
-        assert(terminator.getKind() == tok::r_brace);
+    if (terminator.getKind() != tok::colon) {           // This includes unknown, i.e. a " before }
+        assert(terminator.getKind() == tok::r_brace || terminator.getKind() == tok::unknown);
         lit.push_back('}');
-        return;
+        return terminator.getKind() != tok::unknown;
     }
 
     lit.push_back(':');
@@ -2379,121 +2384,176 @@ void clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char
     };
 
     while (*BufferPtr != '}') {
-        if (*BufferPtr == '{') {    // Nested field starts
-            toLit();
+      if (*BufferPtr == '{') { // Nested field starts
+        toLit();
+        if (*BufferPtr != '{') {
+          // Add a comma in the token stream before the expression tokens.
+          cTok.setLocation(getSourceLocation());
+          tokens.push_back(cTok);
+          Token terminator = processExpression(tokens, false);
+          if (terminator.getKind() == tok::unknown)
+            return false;
 
-            // Add a comma in the token stream before the expression tokens.
-            cTok.setLocation(getSourceLocation());
-            tokens.push_back(cTok);
-            Token terminator = processExpression(tokens, false);
-            if (terminator.getKind() != tok::r_brace)   // Colon not allowed inside nested expression-field.
-                Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1;     // TODO: new diagnostic: formatting spec for dynamic format spec not allowed.
+          if (terminator.getKind() != tok::r_brace) {
+            // Colon not allowed inside nested expression-field.
+            Diag(BufferPtr, diag::err_nested_format_spec);
+            return false;
+          }
 
-            lit.push_back('}');  // The } of the dynamic format
-        } 
-        else
-          toLit();      // Transfer other formatting argument char to the resulting string.
+          lit.push_back('}'); // The } after the nested expression field
+        }
+      } 
+      else if (*BufferPtr == '}') {
+        toLit();
+        if (*BufferPtr != '}') {
+          Diag(BufferPtr, diag::err_unescaped_r_brace);
+          return false;
+        }
+      } 
+      else
+        toLit(); // Transfer other formatting argument char to the resulting
+                 // string.
     }
-    toLit();    // Transfer the final } and advance PufferPtr.
+    toLit(); // Transfer the final } and advance PufferPtr.
+    return true;
 }
 
 Token clang::Lexer::processExpression(std::vector<Token>& tokens, bool allowComma)
 {
-    while (true) {
-        Token token = processNested(tokens);
-        switch (token.getKind()) {
-        case tok::r_paren:
-            Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1; // TODO: new diagnostic: "Extraneous ) in expression-field"
-            break;
+  const char *lpos = BufferPtr - 1;
+  while (true) {
+    Token token;
+    int res = processNested(tokens, token);
+    if (res != 0)
+      return Token();
 
-        case tok::r_square:
-            Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1;     // TODO: new diagnostic: "Extraneous ] in expression-field"
-            break;
+    switch (token.getKind()) {
+    case tok::unknown:
+      Diag(lpos, diag::err_unmatched_paren) << "{";
+      return token;
+      break;
 
-        case tok::question:
-          tokens.push_back(token);
-            Token terminator = processExpression(tokens, true);     // Note: Comma allowed before : by the C++ grammar
-            if (terminator.getKind() != tok::colon)
-              Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1; // TODO: new diagnostic: "Mismatched ? in expression-field"
+    case tok::r_paren:
+      Diag(BufferPtr - 1, diag::err_unmatched_paren) << ")";
+      break;
 
-            tokens.push_back(terminator);
-            return processExpression(tokens, false);
+    case tok::r_square:
+      Diag(BufferPtr - 1, diag::err_unmatched_paren) << "]";
+      break;
 
-        case tok::r_brace:
-        case tok::colon:
-            return token;
+    case tok::question: {
+      tokens.push_back(token);
+      const char *qpos = BufferPtr - 1;
+      Token terminator = processExpression(
+          tokens,
+          true); // Note: Comma allowed between ? and : by the C++ grammar
+      if (terminator.getKind() == tok::unknown)
+        return terminator;
 
-        case tok::coloncolon: {
-          // If a coloncolon token is not followed by an identifier it is to
-          // be interpreted as the colon starting the format spec anyway.
-          const char *save = BufferPtr - 1; // Points to the second of colons.
-          Token ident;
-          PP->Lex(ident);
+      if (terminator.getKind() != tok::colon) {
+        Diag(qpos, diag::err_incomplete_ternary);
+        return terminator; // This must be }
+      }
 
-          if (ident.getKind() != tok::identifier) {
-            BufferPtr = save;
-
-            Token cTok;
-            cTok.startToken();
-            cTok.setKind(tok::colon);
-            return cTok;
-          }
-          tokens.push_back(token);
-          tokens.push_back(ident);
-          break;
-        }
-        case tok::comma:
-          if (!allowComma)
-            // Important to diagnose erroneous comma here as std::format allows extra expressions, which is ridiculous for f-literals as they can't be translated.
-            Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1; // TODO: new diagnostic: "comma in extraction-field. Comman is not allowed in assignment-expression."
-
-        default:
-          tokens.push_back(token);
-        }
+      tokens.push_back(terminator);
+      return processExpression(tokens, false);
     }
+    case tok::r_brace:
+    case tok::colon:
+      return token;
+
+    case tok::coloncolon: {
+      // If a coloncolon token is not followed by an identifier it is to
+      // be interpreted as the colon starting the format spec anyway.
+      const char *save = BufferPtr - 1; // Points to the second of colons.
+      Token ident;
+      PP->Lex(ident);
+
+      if (ident.getKind() != tok::identifier) {
+        BufferPtr = save;
+
+        Token cTok;
+        cTok.startToken();
+        cTok.setKind(tok::colon);
+        return cTok;
+      }
+      tokens.push_back(token);
+      tokens.push_back(ident);
+      break;
+    }
+    case tok::comma:
+      if (!allowComma) {
+        // Important to diagnose erroneous comma here as std::format allows
+        // extra expressions, which is ridiculous for f-literals as they
+        // can't be translated.
+        Diag(BufferPtr - 1, diag::err_comma_in_expression_field);
+        return Token();
+      }
+      [[fallthrough]];
+    default:
+      tokens.push_back(token);
+    }
+  }
 }
 
 // Pass over any number of matched parentheses, pushing all the tokens thus passed over.
 // Return the first token outside any matched parentheses.
-Token clang::Lexer::processNested(std::vector<Token>& tokens)
+int clang::Lexer::processNested(std::vector<Token>& tokens, Token& token)
 {
     while (true) {
-        Token token;
       PP->Lex(token);
 
-        switch (token.getKind()) {
-        case tok::l_paren:
-          processNestedParenthesis(tokens, token, tok::r_paren);
-            break;
-        case tok::l_square:
-          processNestedParenthesis(tokens, token, tok::r_square);
-            break;
-        case tok::l_brace:
-          processNestedParenthesis(tokens, token, tok::r_brace);
-            break;
+      int res = 0;
+      switch (token.getKind()) {
+      case tok::l_paren:
+        res = processNestedParenthesis(tokens, token, tok::r_paren);
+        break;
+      case tok::l_square:
+        res = processNestedParenthesis(tokens, token, tok::r_square);
+        break;
+      case tok::l_brace:
+        res = processNestedParenthesis(tokens, token, tok::r_brace);
+        break;
 
-        default:
-            return token;
-        }
+      default:
+        return 0;
+      }
+
+        if (res != 0)
+          return res;
     }
 }
 
 // Pass over a certain type of parenthesis, indicated by the expected closer token kind.
-void clang::Lexer::processNestedParenthesis(std::vector<Token>& tokens, const Token &token, tok::TokenKind closer) {
+int clang::Lexer::processNestedParenthesis(std::vector<Token>& tokens, const Token &token, tok::TokenKind closer) {
     tokens.push_back(token);
+    const char *pos = BufferPtr - 1;
     while (true) {
-        Token next = processNested(tokens);
-        tokens.push_back(next);
-        if (next.getKind() == closer)
-            return;
+      Token next;
+      int res = processNested(tokens, next);
+      if (res != 0)
+        return res;
 
-        if (next.getKind() == tok::r_paren || next.getKind() == tok::r_square || next.getKind() == tok::r_brace)
-            Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1; // TODO: new diagnostic: "Mismatched {}. A {} was found where a {} was expected.", introducers[intIx], c, terminators[intIx]));
+      if (next.getKind() == tok::unknown) {
+        Diag(pos, diag::err_unmatched_paren) << StringRef(pos, 1);
+        return 1; // Premature " before any matching r-parens seen.
+      }
+
+      tokens.push_back(next);
+      if (next.getKind() == closer)
+        return 0;
+
+      if (next.getKind() == tok::r_paren || next.getKind() == tok::r_square ||
+          next.getKind() == tok::r_brace) {
+        Diag(pos, diag::err_unmatched_paren) << StringRef(pos, 1);
+        return 2;
+      }
     }
 }
 
 
 bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind Kind) {
+  const char *litStart = BufferPtr;   // Before all prefixes
   const char *AfterQuote = CurPtr;
   // Does this string contain the \0 character?
   const char *NulCharacter = nullptr;
@@ -2550,7 +2610,6 @@ bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind
 
   tokens.push_back(Token());        // Placeholder for the literal.
 
-  const char* litStart = CurPtr;
   const char *litPartStart = CurPtr;
   char C = getAndAdvanceChar(CurPtr, Result);
 
@@ -2562,22 +2621,46 @@ bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind
 
     if (C == '\n' || C == '\r' ||              // Newline.
         (C == 0 && CurPtr - 1 == BufferEnd)) { // End of file.
+      if (IgnoreUnterminatedLiterals)
+        return true; // Result still unknown. This is detected by extraction
+                     // field processing in enclosing extraction field.
+
       if (!isLexingRawMode() && !LangOpts.AsmPreprocessor)
         Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1;
       FormTokenWithChars(Result, CurPtr - 1, tok::unknown);
       return true;
     }
 
-    // Embyrotic implementation which just removes everything between { and }
     // Note: {{ a quoted brace, We need to keep both as the resulting literal is still input to std::format!
-    if (C == '{' && *CurPtr != '{') {
-      BufferPtr = CurPtr;
-      processExtractionField(tokens, litPartStart, resultingLiteral);
-      CurPtr = BufferPtr;
-      litPartStart = CurPtr;
+    if (C == '{') {
+      if (*CurPtr != '{') {
+        BufferPtr = CurPtr;
+        // Note: If we get a
+        bool save = IgnoreUnterminatedLiterals;
+        IgnoreUnterminatedLiterals = true;
+        bool ok =
+            processExtractionField(tokens, litPartStart, resultingLiteral);
+        IgnoreUnterminatedLiterals = save;
+        if (!ok) {
+          BufferPtr = litStart + 1;     // Pass the f: TODO: somehow pass any L, u, U or u8 but not the f to LexStringLiteral. Or just create a fake token, we're already at the trailing " in the input anyway.
+          return LexStringLiteral(
+              Result, AfterQuote,
+              Kind); // After reporting errors here just pass a regular string
+                     // literal along. This is to avoid errors later.
+        }
+        CurPtr = BufferPtr;
+        litPartStart = CurPtr;
+      } 
+      else
+        CurPtr++;
     }
-
-    if (C == 0) {
+    else if (C == '}') {
+      if (*CurPtr != '}')
+        Diag(CurPtr - 1, diag::err_unescaped_r_brace);
+      else
+        CurPtr++;       // Pass the second }.
+    } 
+    else if (C == 0) {
       if (isCodeCompletionPoint(CurPtr - 1)) {
         if (ParsingFilename)
           codeCompleteIncludedFile(AfterQuote, CurPtr - 1, /*IsAngled=*/false);
@@ -2619,11 +2702,11 @@ bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind
   rpTok.setLength(1);
   tokens.push_back(rpTok);
 
-  SourceLocation litLoc = getSourceLocation(litStart, CurPtr - BufferPtr);
+  SourceLocation litLoc = getSourceLocation(AfterQuote, CurPtr - BufferPtr);
   Token &litTok = tokens[literalPos];
   litTok.startToken();
   litTok.setKind(Kind);
-  litTok.setLocation(getSourceLocation(litStart));
+  litTok.setLocation(getSourceLocation(AfterQuote));
   litTok.setLiteralData(lit);
   litTok.setKind(Kind);
   litTok.setLength(resultingLiteral.size());
@@ -3015,7 +3098,7 @@ bool Lexer::SkipLineComment(Token &Result, const char *CurPtr,
   // Otherwise, eat the \n character.  We don't care if this is a \n\r or
   // \r\n sequence.  This is an efficiency hack (because we know the \n can't
   // contribute to another token), it isn't needed for correctness.  Note that
-  // this is ok even in KeepWhitespaceMode, because we would have returned the
+  // this is res even in KeepWhitespaceMode, because we would have returned the
   // comment above in that mode.
   NewLinePtr = CurPtr++;
 
