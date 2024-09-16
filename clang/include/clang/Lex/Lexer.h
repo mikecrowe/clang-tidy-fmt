@@ -756,8 +756,14 @@ private:
   int processNested        (std::vector<Token> &tokens, Token& token);
   int processNestedParenthesis(std::vector<Token> &tokens, const Token &token,
                               tok::TokenKind closer);
+  bool LexStringOrCharLiteral(Token &Result, const char *CurPtr,
+                              tok::TokenKind StringLiteralKind,
+                              tok::TokenKind CharLiteralKind,
+                              tok::TokenKind FLiteralKind);
   bool LexFLiteral(Token &Result, const char *CurPtr,
                               tok::TokenKind Kind);
+  bool LexRawFLiteral(Token &Result, const char *CurPtr,
+                           tok::TokenKind Kind);
   bool LexAngledStringLiteral(Token &Result, const char *CurPtr);
   bool LexCharConstant       (Token &Result, const char *CurPtr,
                               tok::TokenKind Kind);

@@ -1256,6 +1256,7 @@ static char GetTrigraphCharForLetter(char Letter) {
 
 /// DecodeTrigraphChar - If the specified character is a legal trigraph when
 /// prefixed with ??, emit a trigraph warning.  If trigraphs are enabled,
+/// 
 /// return the result character.  Finally, emit a warning about trigraph use
 /// whether trigraphs are enabled or not.
 static char DecodeTrigraphChar(const char *CP, Lexer *L, bool Trigraphs) {
@@ -2550,6 +2551,59 @@ int clang::Lexer::processNestedParenthesis(std::vector<Token>& tokens, const Tok
       }
     }
 }
+
+
+// Lex any string or char literal. When we get here we have seen u,u8, U or L. This is evident from the first tokenkind. The second tokenkind is provided as the corresponding char literal token in case we only saw
+// a unicode or wide prefix. If a literal actually followed returns true. If the letter was just the start of an identifier return false.
+bool clang::Lexer::LexStringOrCharLiteral(Token &Result, const char *CurPtr,
+                                          tok::TokenKind StringLiteralKind,
+                                          tok::TokenKind CharLiteralKind,
+                                          tok::TokenKind FLiteralKind) {
+  if (!LangOpts.CPlusPlus11 && !LangOpts.C11) {
+
+    unsigned SizeTmp;
+    char Char = getCharAndSize(CurPtr, SizeTmp);
+
+    // string literal
+    if (Char == '"')
+      return LexStringLiteral(Result, ConsumeChar(CurPtr, SizeTmp, Result),
+                              StringLiteralKind);
+
+    // character constant
+    if (Char == '\'')
+      return LexCharConstant(Result, ConsumeChar(CurPtr, SizeTmp, Result),
+                             CharLiteralKind);
+
+    // UTF-16 raw string literal
+    unsigned SizeTmp2;
+    if (Char == 'R' && LangOpts.CPlusPlus11 &&
+        getCharAndSize(CurPtr + SizeTmp, SizeTmp2) == '"')
+      return LexRawStringLiteral(
+          Result,
+          ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result), SizeTmp2, Result),
+          StringLiteralKind);
+
+    if (Char == 'f' && LangOpts.CPlusPlus26) {
+      Char = getCharAndSize(CurPtr + SizeTmp, SizeTmp2);
+      if (Char == '"')
+        return LexFLiteral(
+            Result,
+            ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result), SizeTmp2, Result),
+            FLiteralKind);
+      unsigned SizeTmp3;
+      if (Char == 'R' && LangOpts.CPlusPlus11 &&
+          getCharAndSize(CurPtr + SizeTmp + SizeTmp2, SizeTmp3) == '"')
+        return LexRawFLiteral(
+            Result,
+            ConsumeChar(ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result),
+                                    SizeTmp2, Result),
+                        SizeTmp3, Result),
+            FLiteralKind);
+    }
+  }
+  return false;
+}
+
 
 
 bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind Kind) {
@@ -4251,53 +4305,16 @@ LexStart:
 
     if (LangOpts.CPlusPlus11 || LangOpts.C11) {
       Char = getCharAndSize(CurPtr, SizeTmp);
+      bool ok;
+      if (Char == '8')
+        ok = LexStringOrCharLiteral(Result, ConsumeChar(CurPtr, SizeTmp, Result),
+                                    tok::utf8_string_literal, tok::utf8_char_constant, tok::utf8_f_string_literal);
+      else
+        ok = LexStringOrCharLiteral(Result, CurPtr,
+                                    tok::utf16_string_literal, tok::utf16_char_constant, tok::utf16_f_string_literal);
 
-      // UTF-16 string literal
-      if (Char == '"')
-        return LexStringLiteral(Result, ConsumeChar(CurPtr, SizeTmp, Result),
-                                tok::utf16_string_literal);
-
-      // UTF-16 character constant
-      if (Char == '\'')
-        return LexCharConstant(Result, ConsumeChar(CurPtr, SizeTmp, Result),
-                               tok::utf16_char_constant);
-
-      // UTF-16 raw string literal
-      if (Char == 'R' && LangOpts.CPlusPlus11 &&
-          getCharAndSize(CurPtr + SizeTmp, SizeTmp2) == '"')
-        return LexRawStringLiteral(Result,
-                               ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result),
-                                           SizeTmp2, Result),
-                               tok::utf16_string_literal);
-
-      if (Char == '8') {
-        char Char2 = getCharAndSize(CurPtr + SizeTmp, SizeTmp2);
-
-        // UTF-8 string literal
-        if (Char2 == '"')
-          return LexStringLiteral(Result,
-                               ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result),
-                                           SizeTmp2, Result),
-                               tok::utf8_string_literal);
-        if (Char2 == '\'' && (LangOpts.CPlusPlus17 || LangOpts.C23))
-          return LexCharConstant(
-              Result, ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result),
-                                  SizeTmp2, Result),
-              tok::utf8_char_constant);
-
-        if (Char2 == 'R' && LangOpts.CPlusPlus11) {
-          unsigned SizeTmp3;
-          char Char3 = getCharAndSize(CurPtr + SizeTmp + SizeTmp2, SizeTmp3);
-          // UTF-8 raw string literal
-          if (Char3 == '"') {
-            return LexRawStringLiteral(Result,
-                   ConsumeChar(ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result),
-                                           SizeTmp2, Result),
-                               SizeTmp3, Result),
-                   tok::utf8_string_literal);
-          }
-        }
-      }
+      if (ok)
+        return true;
     }
 
     // treat u like the start of an identifier.
@@ -4307,27 +4324,9 @@ LexStart:
     // Notify MIOpt that we read a non-whitespace/non-comment token.
     MIOpt.ReadToken();
 
-    if (LangOpts.CPlusPlus11 || LangOpts.C11) {
-      Char = getCharAndSize(CurPtr, SizeTmp);
-
-      // UTF-32 string literal
-      if (Char == '"')
-        return LexStringLiteral(Result, ConsumeChar(CurPtr, SizeTmp, Result),
-                                tok::utf32_string_literal);
-
-      // UTF-32 character constant
-      if (Char == '\'')
-        return LexCharConstant(Result, ConsumeChar(CurPtr, SizeTmp, Result),
-                               tok::utf32_char_constant);
-
-      // UTF-32 raw string literal
-      if (Char == 'R' && LangOpts.CPlusPlus11 &&
-          getCharAndSize(CurPtr + SizeTmp, SizeTmp2) == '"')
-        return LexRawStringLiteral(Result,
-                               ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result),
-                                           SizeTmp2, Result),
-                               tok::utf32_string_literal);
-    }
+    if (LexStringOrCharLiteral(Result, CurPtr,
+                               tok::utf32_string_literal, tok::utf32_char_constant, tok::utf32_f_string_literal))
+      return true;
 
     // treat U like the start of an identifier.
     return LexIdentifierContinue(Result, CurPtr);
@@ -4353,11 +4352,15 @@ LexStart:
     MIOpt.ReadToken();
 
     if (LangOpts.CPlusPlus11) {
-      Char = getCharAndSize(CurPtr, SizeTmp);
-
-      if (Char == '"')
-        // LexFLiteral pushes a MacroInfo object containing everything except the std of the std::format( prefix which is set in Result instead.
-        return LexFLiteral(Result, ConsumeChar(CurPtr, SizeTmp, Result), tok::string_literal);
+        Char = getCharAndSize(CurPtr, SizeTmp);
+        if (Char == '"')
+            return LexFLiteral(Result, ConsumeChar(CurPtr, SizeTmp, Result), tok::f_string_literal);
+        unsigned SizeTmp2;
+        if (Char == 'R' && LangOpts.CPlusPlus11 &&
+            getCharAndSize(CurPtr + SizeTmp, SizeTmp2) == '"')
+          return LexRawFLiteral(Result,
+                                ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result), SizeTmp2, Result),
+              tok::f_string_literal);
     }
 
     // treat R like the start of an identifier.
@@ -4366,25 +4369,11 @@ LexStart:
   case 'L':   // Identifier (Loony) or wide literal (L'x' or L"xyz").
     // Notify MIOpt that we read a non-whitespace/non-comment token.
     MIOpt.ReadToken();
-    Char = getCharAndSize(CurPtr, SizeTmp);
 
-    // Wide string literal.
-    if (Char == '"')
-      return LexStringLiteral(Result, ConsumeChar(CurPtr, SizeTmp, Result),
-                              tok::wide_string_literal);
+    if (LexStringOrCharLiteral(Result, CurPtr,
+                               tok::wide_string_literal, tok::wide_char_constant, tok::wide_f_string_literal))
+        return true;
 
-    // Wide raw string literal.
-    if (LangOpts.CPlusPlus11 && Char == 'R' &&
-        getCharAndSize(CurPtr + SizeTmp, SizeTmp2) == '"')
-      return LexRawStringLiteral(Result,
-                               ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result),
-                                           SizeTmp2, Result),
-                               tok::wide_string_literal);
-
-    // Wide character constant.
-    if (Char == '\'')
-      return LexCharConstant(Result, ConsumeChar(CurPtr, SizeTmp, Result),
-                             tok::wide_char_constant);
     // FALL THROUGH, treating L like the start of an identifier.
     [[fallthrough]];
 

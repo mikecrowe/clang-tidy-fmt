@@ -92,6 +92,12 @@ inline bool isStringLiteral(TokenKind K) {
          K == tok::utf32_string_literal;
 }
 
+inline bool isFLiteral(TokenKind K) {
+  return K == tok::f_string_literal || K == tok::wide_f_string_literal ||
+         K == tok::utf8_f_string_literal || K == tok::utf16_f_string_literal ||
+         K == tok::utf32_f_string_literal;
+}
+
 /// Return true if this is a "literal" kind, like a numeric
 /// constant, string, etc.
 inline bool isLiteral(TokenKind K) {

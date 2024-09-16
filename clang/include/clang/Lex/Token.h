@@ -44,7 +44,7 @@ class Token {
 
   /// UintData - This holds either the length of the token text, when
   /// a normal token, or the end of the SourceRange when an annotation
-  /// token.
+  /// token. (For f-literals the text pointer is in the FLiteralInfo)
   SourceLocation::UIntTy UintData;
 
   /// PtrData - This is a union of four different pointer types, which depends
@@ -55,6 +55,8 @@ class Token {
   ///  Literals:  isLiteral() returns true.
   ///    This is a pointer to the start of the token in a text buffer, which
   ///    may be dirty (have trigraphs / escaped newlines).
+  ///  f-literals: isFLiteral() returns true.
+  ///    This is a pointer to a  Token::FLiteralInfo struct.
   ///  Annotations (resolved type names, C++ scopes, etc): isAnnotation().
   ///    This is a pointer to sema-specific data for the annotation token.
   ///  Eof:
@@ -91,6 +93,12 @@ public:
                           // tokens are *not* reinjected.
   };
 
+  struct FLiteralInfo {
+    const char *Text;                   // Pointer to the text after removing the expression-fields.
+    SourceLocation::UIntTy TokenCount;  // Number of tokens in TokenPtr array.
+    Token *TokenPtr;                    // Pointer to an array of tokens constituting the comma separated list of all expression-fields.
+  };
+
   tok::TokenKind getKind() const { return Kind; }
   void setKind(tok::TokenKind K) { Kind = K; }
 
@@ -115,6 +123,19 @@ public:
   /// constant, string, etc.
   bool isLiteral() const {
     return tok::isLiteral(getKind());
+  }
+
+  /// Return true if this is a "f-iteral", i.e. a string literal with expression-fields extracted to a token sequence.
+  bool isFLiteral() const { return tok::isFLiteral(getKind()); }
+
+  const FLiteralInfo& getFLiteralInfo() const {
+    assert(isFLiteral() && "Cannot get FliteralInfo data of non-f-literal");
+    return *reinterpret_cast<const FLiteralInfo*>(PtrData);
+  }
+
+  void setFLiteralData(FLiteralInfo &data) {
+    assert(isFLiteral() && "Cannot set FliteralInfo data of non-f-literal");
+    PtrData = &data;
   }
 
   /// Return true if this is any of tok::annot_* kind tokens.
