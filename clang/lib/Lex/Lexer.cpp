@@ -2424,7 +2424,7 @@ Token clang::Lexer::processExpression(std::vector<Token>& tokens, bool allowComm
   const char *lpos = BufferPtr - 1;
   while (true) {
     Token token;
-    int res = processNested(tokens, token);
+    int res = processNested(tokens, token, false);
     if (res != 0)
       return Token();
 
@@ -2482,15 +2482,7 @@ Token clang::Lexer::processExpression(std::vector<Token>& tokens, bool allowComm
       tokens.push_back(ident);
       break;
     }
-    case tok::comma:
-      if (!allowComma) {
-        // Important to diagnose erroneous comma here as std::format allows
-        // extra expressions, which is ridiculous for f-literals as they
-        // can't be translated.
-        Diag(BufferPtr - 1, diag::err_comma_in_expression_field);
-        return Token();
-      }
-      [[fallthrough]];
+
     default:
       tokens.push_back(token);
     }
@@ -2499,7 +2491,7 @@ Token clang::Lexer::processExpression(std::vector<Token>& tokens, bool allowComm
 
 // Pass over any number of matched parentheses, pushing all the tokens thus passed over.
 // Return the first token outside any matched parentheses.
-int clang::Lexer::processNested(std::vector<Token>& tokens, Token& token)
+int clang::Lexer::processNested(std::vector<Token>& tokens, Token& token, bool expectRBracket)
 {
     while (true) {
       PP->Lex(token);
@@ -2516,12 +2508,23 @@ int clang::Lexer::processNested(std::vector<Token>& tokens, Token& token)
         res = processNestedParenthesis(tokens, token, tok::r_brace);
         break;
 
+      case tok::r_square:
+        // Kludge to handle the :> digraph converting to ] unless this is not
+        // expected in which case it reverts to : followed by >
+        if (!expectRBracket && BufferPtr[-1] == '>') {
+          // Create a fake : token to return, and back BufferPtr one char so
+          // that the next char will be >
+          token.setKind(tok::colon);
+          BufferPtr--;
+        }
+        [[fallthrough]];
+    
       default:
         return 0;
       }
 
-        if (res != 0)
-          return res;
+      if (res != 0)
+        return res;
     }
 }
 
@@ -2531,7 +2534,7 @@ int clang::Lexer::processNestedParenthesis(std::vector<Token>& tokens, const Tok
     const char *pos = BufferPtr - 1;
     while (true) {
       Token next;
-      int res = processNested(tokens, next);
+      int res = processNested(tokens, next, closer == tok::r_square);
       if (res != 0)
         return res;
 
@@ -2553,13 +2556,13 @@ int clang::Lexer::processNestedParenthesis(std::vector<Token>& tokens, const Tok
 }
 
 
-// Lex any string or char literal. When we get here we have seen u,u8, U or L. This is evident from the first tokenkind. The second tokenkind is provided as the corresponding char literal token in case we only saw
-// a unicode or wide prefix. If a literal actually followed returns true. If the letter was just the start of an identifier return false.
+// Lex any string or char literal. When we get here we have seen u,u8, U or L. Which is evident from the first tokenkind. The second
+// tokenkind is provided as the corresponding char literal token in case we only saw a unicode or wide prefix. If a literal actually
+// followed returns true. If the letter was just the start of an identifier return false.
 bool clang::Lexer::LexStringOrCharLiteral(Token &Result, const char *CurPtr,
                                           tok::TokenKind StringLiteralKind,
-                                          tok::TokenKind CharLiteralKind,
-                                          tok::TokenKind FLiteralKind) {
-  if (!LangOpts.CPlusPlus11 && !LangOpts.C11) {
+                                          tok::TokenKind CharLiteralKind) {
+  if (LangOpts.CPlusPlus11 || LangOpts.C11) {
 
     unsigned SizeTmp;
     char Char = getCharAndSize(CurPtr, SizeTmp);
@@ -2589,7 +2592,7 @@ bool clang::Lexer::LexStringOrCharLiteral(Token &Result, const char *CurPtr,
         return LexFLiteral(
             Result,
             ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result), SizeTmp2, Result),
-            FLiteralKind);
+            StringLiteralKind);
       unsigned SizeTmp3;
       if (Char == 'R' && LangOpts.CPlusPlus11 &&
           getCharAndSize(CurPtr + SizeTmp + SizeTmp2, SizeTmp3) == '"')
@@ -2598,7 +2601,7 @@ bool clang::Lexer::LexStringOrCharLiteral(Token &Result, const char *CurPtr,
             ConsumeChar(ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result),
                                     SizeTmp2, Result),
                         SizeTmp3, Result),
-            FLiteralKind);
+            StringLiteralKind);
     }
   }
   return false;
@@ -2615,54 +2618,14 @@ bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind
   if (PP == nullptr)
     return LexStringLiteral(Result, CurPtr, Kind);
 
-  if (!isLexingRawMode() &&
-      (Kind == tok::utf8_string_literal || Kind == tok::utf16_string_literal ||
-       Kind == tok::utf32_string_literal))
-    Diag(BufferPtr, LangOpts.CPlusPlus ? diag::warn_cxx98_compat_unicode_literal
-                                       : diag::warn_c99_compat_unicode_literal);
-
   // As the string literal is no longer the same as in the source code we must save it into this variable
   // until the right " is found. Then we create a token around it, with its source location set to the start of the original literal
-  // and push this into the MacroInfo after the initial std::format( sequence. To handle the life time of the string contents
-  // we use the BP allocator function.
-  std::string resultingLiteral = "\"";
+  // and push this into the Text member of the Token::FLiteralInfo created using an arena allocation to avoid dangling.
+  std::string resultingLiteral = "\"";   // Usually string literals have the entire prefix included, but only the leading " is actually checked by StringLiteralParser::init when concatenating.
   
   // Collect all tokens in this vector until we know how many we have, i.e. at the end.
+  // Maybe there is a better way of doing this as we are moving the tokens to an arena allocated array later.
   std::vector<Token> tokens;
-
-  // Form the prefix tokens.
-
-  Token ccTok;
-  ccTok.startToken();
-  ccTok.setKind(tok::coloncolon);
-  ccTok.setLocation(getSourceLocation());
-  tokens.push_back(ccTok);
-
-  Token stdTok;
-  stdTok.startToken();
-  stdTok.setLocation(getSourceLocation());
-  stdTok.setIdentifierInfo(PP->getIdentifierInfo("std"));
-  stdTok.setKind(tok::identifier);
-  tokens.push_back(stdTok);
-
-  tokens.push_back(ccTok);
-
-  Token fmtTok;
-  fmtTok.startToken();
-  fmtTok.setLocation(getSourceLocation());
-  fmtTok.setIdentifierInfo(PP->getIdentifierInfo("format"));
-  fmtTok.setKind(tok::identifier);
-  tokens.push_back(fmtTok);
-
-  Token lpTok;
-  lpTok.startToken();
-  lpTok.setLocation(getSourceLocation());
-  lpTok.setKind(tok::l_paren);
-  tokens.push_back(lpTok);
-
-  const size_t literalPos = tokens.size();      // 4
-
-  tokens.push_back(Token());        // Placeholder for the literal.
 
   const char *litPartStart = CurPtr;
   char C = getAndAdvanceChar(CurPtr, Result);
@@ -2677,7 +2640,7 @@ bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind
         (C == 0 && CurPtr - 1 == BufferEnd)) { // End of file.
       if (IgnoreUnterminatedLiterals)
         return true; // Result still unknown. This is detected by extraction
-                     // field processing in enclosing extraction field.
+      // field processing in enclosing extraction field.
 
       if (!isLexingRawMode() && !LangOpts.AsmPreprocessor)
         Diag(BufferPtr, diag::ext_unterminated_char_or_string) << 1;
@@ -2692,15 +2655,13 @@ bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind
         // Note: If we get a
         bool save = IgnoreUnterminatedLiterals;
         IgnoreUnterminatedLiterals = true;
-        bool ok =
-            processExtractionField(tokens, litPartStart, resultingLiteral);
+        bool ok = processExtractionField(tokens, litPartStart, resultingLiteral);
         IgnoreUnterminatedLiterals = save;
         if (!ok) {
-          BufferPtr = litStart + 1;     // Pass the f: TODO: somehow pass any L, u, U or u8 but not the f to LexStringLiteral. Or just create a fake token, we're already at the trailing " in the input anyway.
-          return LexStringLiteral(
-              Result, AfterQuote,
-              Kind); // After reporting errors here just pass a regular string
-                     // literal along. This is to avoid errors later.
+          BufferPtr = litStart + 1;
+          // reporting errors here just parse as a regular string literal. TODO: Instead don't reparse but forward an empty string literal of the appropriate kind to the preprocessor.
+          return LexStringLiteral(Result, AfterQuote, Kind);
+          // literal along. This is to avoid errors later.
         }
         CurPtr = BufferPtr;
         litPartStart = CurPtr;
@@ -2735,13 +2696,8 @@ bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind
   // If a nul character existed in the string, warn about it.
   if (NulCharacter && !isLexingRawMode())
     Diag(NulCharacter, diag::null_in_char_or_string) << 1;
-  
-  // If we are in C++11, lex the optional ud-suffix. This is probably not useful for f literals as stD::format would not accept the result of the customer defined operator, which is
-  // no longer a string literal.
-  if (LangOpts.CPlusPlus)
-    CurPtr = LexUDSuffix(Result, CurPtr, true);
 
-  // COmplete the resulting literal by adding the bit after the last }
+  // Complete the resulting literal by adding the bit after the last }
   resultingLiteral.append(litPartStart, CurPtr);
 
   // Fill in the literalPos token with the remaining string. But to keep its contents first allocate
@@ -2749,21 +2705,162 @@ bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind
   char *lit = new (PP->getPreprocessorAllocator()) char[resultingLiteral.size() + 1];
   memcpy(lit, resultingLiteral.c_str(), resultingLiteral.size() + 1);
 
-  Token rpTok;
-  rpTok.startToken();
-  rpTok.setKind(tok::r_paren);
-  rpTok.setLocation(getSourceLocation(CurPtr));
-  rpTok.setLength(1);
-  tokens.push_back(rpTok);
+  // The completed lexing is represented by a MacroInfo object which is pushed
+  // onto the macro expansion stack This expansion consists of std::format("...
+  // the remaining string ...", ...the extracted argument tokens...)
 
-  SourceLocation litLoc = getSourceLocation(AfterQuote, CurPtr - BufferPtr);
-  Token &litTok = tokens[literalPos];
-  litTok.startToken();
-  litTok.setKind(Kind);
-  litTok.setLocation(getSourceLocation(AfterQuote));
-  litTok.setLiteralData(lit);
-  litTok.setKind(Kind);
-  litTok.setLength(resultingLiteral.size());
+  BufferPtr = CurPtr;
+
+  Token* tokStore = new (PP->getPreprocessorAllocator()) Token[tokens.size()];
+  std::copy(tokens.begin(), tokens.end(), tokStore);
+
+  Token::FLiteralInfo* fli = new (PP->getPreprocessorAllocator()) Token::FLiteralInfo;
+  fli->Text = lit;
+  fli->TokenCount = SourceLocation::UIntTy(tokens.size());
+  fli->TokenPtr = tokStore;
+
+  Result.setKind(Kind);
+  Result.setLocation(getSourceLocation(AfterQuote));        // Probably not needed
+  Result.setFLiteralInfo(*fli);
+  Result.setLength(resultingLiteral.size());
+
+  return true;  // Result has been filled in.
+}
+
+
+bool clang::Lexer::LexRawFLiteral(Token &Result, const char *CurPtr, tok::TokenKind Kind) {
+  const char *litStart = BufferPtr;   // Before all prefixes
+  const char *AfterQuote = CurPtr;
+
+  if (PP == nullptr)
+    return LexRawStringLiteral(Result, CurPtr, Kind);
+
+  // This function doesn't use getAndAdvanceChar because C++0x [lex.pptoken]p3:
+  //  Between the initial and final double quote characters of the raw string,
+  //  any transformations performed in phases 1 and 2 (trigraphs,
+  //  universal-character-names, and line splicing) are reverted.
+
+  if (!isLexingRawMode())
+    Diag(BufferPtr, diag::warn_cxx98_compat_raw_string_literal);
+
+  unsigned PrefixLen = 0;
+
+  while (PrefixLen != 16 && isRawStringDelimBody(CurPtr[PrefixLen])) {
+    ++PrefixLen;
+    if (!isLexingRawMode() &&
+        llvm::is_contained({'$', '@', '`'}, CurPtr[PrefixLen])) {
+      const char *Pos = &CurPtr[PrefixLen];
+      Diag(Pos, LangOpts.CPlusPlus26
+           ? diag::warn_cxx26_compat_raw_string_literal_character_set
+           : diag::ext_cxx26_raw_string_literal_character_set)
+          << StringRef(Pos, 1);
+    }
+  }
+
+  // If the last character was not a '(', then we didn't lex a valid delimiter.
+  if (CurPtr[PrefixLen] != '(') {
+    if (!isLexingRawMode()) {
+      const char *PrefixEnd = &CurPtr[PrefixLen];
+      if (PrefixLen == 16) {
+        Diag(PrefixEnd, diag::err_raw_delim_too_long);
+      } else if (*PrefixEnd == '\n') {
+        Diag(PrefixEnd, diag::err_invalid_newline_raw_delim);
+      } else {
+        Diag(PrefixEnd, diag::err_invalid_char_raw_delim)
+            << StringRef(PrefixEnd, 1);
+      }
+    }
+
+    // Search for the next '"' in hopes of salvaging the lexer. Unfortunately,
+    // it's possible the '"' was intended to be part of the raw string, but
+    // there's not much we can do about that.
+    while (true) {
+      char C = *CurPtr++;
+
+      if (C == '"')
+        break;
+      if (C == 0 && CurPtr-1 == BufferEnd) {
+        --CurPtr;
+        break;
+      }
+    }
+
+    FormTokenWithChars(Result, CurPtr, tok::unknown);
+    return true;
+  }
+
+  // Save prefix and move CurPtr past it
+  const char *Prefix = CurPtr;
+  CurPtr += PrefixLen + 1; // skip over prefix and '('
+
+  // As the string literal is no longer the same as in the source code we must save it into this variable
+  // until the right " is found. Then we create a token around it, with its source location set to the start of the original literal
+  // and push this into the MacroInfo after the initial std::format( sequence. To handle the life time of the string contents
+  // we use the BP allocator function.
+  std::string resultingLiteral(BufferPtr, CurPtr);          // Pick up all the prefixes
+
+  // Collect all tokens in this vector until we know how many we have, i.e. at the end.
+  // Maybe there is a better way of doing this as we are moving the tokens to an arena allocated array later.
+  std::vector<Token> tokens;
+
+  const char *litPartStart = CurPtr;
+
+  while (true) {
+    char C = *CurPtr++;
+
+    if (C == ')') {
+      // Check for prefix match and closing quote.
+      if (strncmp(CurPtr, Prefix, PrefixLen) == 0 && CurPtr[PrefixLen] == '"') {
+        CurPtr += PrefixLen + 1; // skip over prefix and '"'
+        break;
+      }
+    }
+    else if (C == 0 && CurPtr-1 == BufferEnd) { // End of file.
+      if (!isLexingRawMode())
+        Diag(BufferPtr, diag::err_unterminated_raw_string)
+            << StringRef(Prefix, PrefixLen);
+      FormTokenWithChars(Result, CurPtr-1, tok::unknown);
+      return true;
+    }
+
+    // Note: {{ a quoted brace, We need to keep both as the resulting literal is still input to std::format!
+    if (C == '{') {
+      if (*CurPtr != '{') {
+        BufferPtr = CurPtr;
+        // Note: If we get a
+        bool save = IgnoreUnterminatedLiterals;
+        IgnoreUnterminatedLiterals = true;
+        bool ok = processExtractionField(tokens, litPartStart, resultingLiteral);
+        IgnoreUnterminatedLiterals = save;
+        if (!ok) {
+          BufferPtr = litStart + 1;     // Pass the f: TODO: somehow pass any L, u, U or u8 but not the f to LexStringLiteral. Or just create a fake token, we're already at the trailing " in the input anyway. After
+                 // reporting errors here just pass a regular string
+          // literal along. This is to avoid errors later.
+          return LexRawStringLiteral(Result, AfterQuote, Kind);
+        }
+        CurPtr = BufferPtr;
+        litPartStart = CurPtr;
+      } 
+      else
+        CurPtr++;
+    }
+    else if (C == '}') {
+      if (*CurPtr != '}')
+        Diag(CurPtr - 1, diag::err_unescaped_r_brace);
+      else
+        CurPtr++;       // Pass the second }.
+    } 
+  }
+
+  // f literals can't be combined with ud suffixes, so don't parse such.
+
+  // Complete the resulting literal by adding the bit after the last }
+  resultingLiteral.append(litPartStart, CurPtr);
+
+  // Fill in the literalPos token with the remaining string. But to keep its contents first allocate
+  // using the bumpAllocator from PP.
+  char *lit = new (PP->getPreprocessorAllocator()) char[resultingLiteral.size() + 1];
+  memcpy(lit, resultingLiteral.c_str(), resultingLiteral.size() + 1);
 
   // The completed lexing is represented by a MacroInfo object which is pushed
   // onto the macro expansion stack This expansion consists of std::format("...
@@ -2771,11 +2868,21 @@ bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind
 
   BufferPtr = CurPtr;
 
-  auto tokStore = std::make_unique<Token[]>(tokens.size());
-  std::copy(tokens.begin(), tokens.end(), tokStore.get());
+  Token* tokStore = new (PP->getPreprocessorAllocator()) Token[tokens.size()];
+  std::copy(tokens.begin(), tokens.end(), tokStore);
 
-  PP->EnterTokenStream(std::move(tokStore), tokens.size(), true, false);
-  return false;  // Result has not been filled in.
+  Token::FLiteralInfo* fli = new (PP->getPreprocessorAllocator()) Token::FLiteralInfo;
+  fli->Text = lit;
+  fli->TokenCount = SourceLocation::UIntTy(tokens.size());
+  fli->TokenPtr = tokStore;
+
+  Result.startToken();
+  Result.setKind(Kind);
+  Result.setLocation(getSourceLocation(AfterQuote));        // Probably not needed
+  Result.setFLiteralInfo(*fli);
+  Result.setLength(resultingLiteral.size());
+
+  return true;  // Result has been filled in.
 }
 
 
@@ -4308,10 +4415,10 @@ LexStart:
       bool ok;
       if (Char == '8')
         ok = LexStringOrCharLiteral(Result, ConsumeChar(CurPtr, SizeTmp, Result),
-                                    tok::utf8_string_literal, tok::utf8_char_constant, tok::utf8_f_string_literal);
+                                    tok::utf8_string_literal, tok::utf8_char_constant);
       else
         ok = LexStringOrCharLiteral(Result, CurPtr,
-                                    tok::utf16_string_literal, tok::utf16_char_constant, tok::utf16_f_string_literal);
+                                    tok::utf16_string_literal, tok::utf16_char_constant);
 
       if (ok)
         return true;
@@ -4325,7 +4432,7 @@ LexStart:
     MIOpt.ReadToken();
 
     if (LexStringOrCharLiteral(Result, CurPtr,
-                               tok::utf32_string_literal, tok::utf32_char_constant, tok::utf32_f_string_literal))
+                               tok::utf32_string_literal, tok::utf32_char_constant))
       return true;
 
     // treat U like the start of an identifier.
@@ -4352,15 +4459,17 @@ LexStart:
     MIOpt.ReadToken();
 
     if (LangOpts.CPlusPlus11) {
-        Char = getCharAndSize(CurPtr, SizeTmp);
-        if (Char == '"')
-            return LexFLiteral(Result, ConsumeChar(CurPtr, SizeTmp, Result), tok::f_string_literal);
-        unsigned SizeTmp2;
-        if (Char == 'R' && LangOpts.CPlusPlus11 &&
-            getCharAndSize(CurPtr + SizeTmp, SizeTmp2) == '"')
-          return LexRawFLiteral(Result,
-                                ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result), SizeTmp2, Result),
-              tok::f_string_literal);
+      Char = getCharAndSize(CurPtr, SizeTmp);
+      if (Char == '"')
+        return LexFLiteral(Result, ConsumeChar(CurPtr, SizeTmp, Result),
+                           tok::string_literal);
+      unsigned SizeTmp2;
+      if (Char == 'R' && LangOpts.CPlusPlus11 &&
+          getCharAndSize(CurPtr + SizeTmp, SizeTmp2) == '"')
+        return LexRawFLiteral(
+            Result,
+            ConsumeChar(ConsumeChar(CurPtr, SizeTmp, Result), SizeTmp2, Result),
+            tok::string_literal);
     }
 
     // treat R like the start of an identifier.
@@ -4371,7 +4480,7 @@ LexStart:
     MIOpt.ReadToken();
 
     if (LexStringOrCharLiteral(Result, CurPtr,
-                               tok::wide_string_literal, tok::wide_char_constant, tok::wide_f_string_literal))
+                               tok::wide_string_literal, tok::wide_char_constant))
         return true;
 
     // FALL THROUGH, treating L like the start of an identifier.

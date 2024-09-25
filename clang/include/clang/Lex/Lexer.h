@@ -753,13 +753,13 @@ private:
   bool processExtractionField(std::vector<Token> &tokens, const char *litStart,
                               std::string &lit);
   Token processExpression    (std::vector<Token> &tokens, bool allowComma);
-  int processNested        (std::vector<Token> &tokens, Token& token);
+  int processNested(std::vector<Token> &tokens, Token &token,
+                    bool expectRBracket);
   int processNestedParenthesis(std::vector<Token> &tokens, const Token &token,
                               tok::TokenKind closer);
   bool LexStringOrCharLiteral(Token &Result, const char *CurPtr,
                               tok::TokenKind StringLiteralKind,
-                              tok::TokenKind CharLiteralKind,
-                              tok::TokenKind FLiteralKind);
+                              tok::TokenKind CharLiteralKind);
   bool LexFLiteral(Token &Result, const char *CurPtr,
                               tok::TokenKind Kind);
   bool LexRawFLiteral(Token &Result, const char *CurPtr,

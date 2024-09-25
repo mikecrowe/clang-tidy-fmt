@@ -185,13 +185,6 @@ TOK(utf8_string_literal) // u8"foo"
 TOK(utf16_string_literal)// u"foo"
 TOK(utf32_string_literal)// U"foo"
 
-// C++26 f-literals. These are distinct as this conveys from lexer to preprocessor/parser that Token::PtrData points to a Token::FLiteralInfo struct (in the arena) 
-TOK(f_string_literal)          // f"foo"
-TOK(wide_f_string_literal)     // Lf"foo"
-TOK(utf8_f_string_literal)     // u8f"foo"
-TOK(utf16_f_string_literal)    // uf"foo"
-TOK(utf32_f_string_literal)    // Uf"foo"
-
 // C99 6.4.6: Punctuators.
 PUNCTUATOR(l_square,            "[")
 PUNCTUATOR(r_square,            "]")

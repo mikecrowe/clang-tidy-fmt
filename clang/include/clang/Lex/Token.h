@@ -91,6 +91,7 @@ public:
     IsReinjected = 0x800, // A phase 4 token that was produced before and
                           // re-added, e.g. via EnterTokenStream. Annotation
                           // tokens are *not* reinjected.
+    IsFLiteral = 0x1000,   // Token is a f-literal, PtrData is FLiteralInfo*
   };
 
   struct FLiteralInfo {
@@ -124,17 +125,23 @@ public:
   bool isLiteral() const {
     return tok::isLiteral(getKind());
   }
+  bool isStringLiteral() const { 
+    return tok::isStringLiteral(getKind());
+  }
 
   /// Return true if this is a "f-iteral", i.e. a string literal with expression-fields extracted to a token sequence.
-  bool isFLiteral() const { return tok::isFLiteral(getKind()); }
+  bool isFLiteral() const { 
+    return getFlag(IsFLiteral); 
+  }
 
   const FLiteralInfo& getFLiteralInfo() const {
     assert(isFLiteral() && "Cannot get FliteralInfo data of non-f-literal");
     return *reinterpret_cast<const FLiteralInfo*>(PtrData);
   }
 
-  void setFLiteralData(FLiteralInfo &data) {
-    assert(isFLiteral() && "Cannot set FliteralInfo data of non-f-literal");
+  void setFLiteralInfo(FLiteralInfo &data) {
+    assert(isStringLiteral() && "Cannot set FliteralInfo data of non-string-literal");
+    setFlag(IsFLiteral);
     PtrData = &data;
   }
 
@@ -245,10 +252,13 @@ public:
   /// otherwise.
   const char *getLiteralData() const {
     assert(isLiteral() && "Cannot get literal data of non-literal");
-    return reinterpret_cast<const char*>(PtrData);
+    if (isFLiteral())
+      return getFLiteralInfo().Text;
+    else
+      return reinterpret_cast<const char*>(PtrData);
   }
   void setLiteralData(const char *Ptr) {
-    assert(isLiteral() && "Cannot set literal data of non-literal");
+    assert(isLiteral() && !isFLiteral() && "Cannot set literal data of non-literal");
     PtrData = const_cast<char*>(Ptr);
   }
 

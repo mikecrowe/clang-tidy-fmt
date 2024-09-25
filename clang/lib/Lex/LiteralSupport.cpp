@@ -2122,6 +2122,8 @@ void StringLiteralParser::init(ArrayRef<Token> StringToks){
       if (ThisTokBuf[0] == '8')
         ++ThisTokBuf;
     }
+    if (ThisTokBuf[0] == 'f')       // Skip f prefix, if any.
+      ++ThisTokBuf;
 
     // Check for raw string
     if (ThisTokBuf[0] == 'R') {

@@ -91,7 +91,6 @@ def ext_unterminated_char_or_string : ExtWarn<
 def err_nested_format_spec : Error<"format specifier in nested expression field">;
 def err_unmatched_paren : Error<"unmatched %0 in expression field">;
 def err_incomplete_ternary : Error<"ternary ? operator without matching : in expression field">;
-def err_comma_in_expression_field : Error<"comma not allowed in expression field">;
 def err_unescaped_r_brace : Error<"unquoted } in format string">;
 
 def ext_empty_character : ExtWarn<"empty character constant">,

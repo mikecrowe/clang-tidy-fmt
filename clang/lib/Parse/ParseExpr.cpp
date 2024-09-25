@@ -3387,10 +3387,94 @@ ExprResult Parser::ParseStringLiteralExpression(bool AllowUserDefinedLiteral,
     return Actions.ActOnUnevaluatedStringLiteral(StringToks);
   }
 
-  // Pass the set of string tokens, ready for concatenation, to the actions.
-  return Actions.ActOnStringLiteral(StringToks,
-                                    AllowUserDefinedLiteral ? getCurScope()
-                                                            : nullptr);
+  // All the tokens of all f-literals are collected here. If not empty after the
+  // loop the tokens are injected in the token stream.
+  
+
+  if (!std::any_of(StringToks.begin(), StringToks.end(), [](Token& tok) { return tok.isFLiteral(); })) {
+    // Pass the set of string tokens, ready for concatenation, to the actions.
+    return Actions.ActOnStringLiteral(
+        StringToks, AllowUserDefinedLiteral ? getCurScope() : nullptr);
+  }
+
+  // Probably unevaluated must not be set here, i.e. we disallow f-literals in such contents (which does not include consteval functions).
+  // Shuffle the tokens to produce a ::std::formatted_string(<all literals> <all tokens>) sequence.
+  // Inject this into the PP and then recurse. back to cast_expression.
+  std::vector<Token> tokens;
+
+  // Inject the preamble consisting of `::std::format(`
+  // TODO: Change this to std::formatted_string ctor call.
+
+     // Form the prefix tokens.
+
+  auto loc = StringToks.front().getLocation();
+  Token ccTok;
+  ccTok.startToken();
+  ccTok.setKind(tok::coloncolon);
+  ccTok.setLocation(loc);
+  tokens.push_back(ccTok);
+
+  Token stdTok;
+  stdTok.startToken();
+  stdTok.setLocation(loc);
+  stdTok.setIdentifierInfo(PP.getIdentifierInfo("std"));
+  stdTok.setKind(tok::identifier);
+  tokens.push_back(stdTok);
+
+  tokens.push_back(ccTok);
+
+  Token fmtTok;
+  fmtTok.startToken();
+  fmtTok.setLocation(loc);
+  fmtTok.setIdentifierInfo(PP.getIdentifierInfo("format"));
+  fmtTok.setKind(tok::identifier);
+  tokens.push_back(fmtTok);
+
+  Token lpTok;
+  lpTok.startToken();
+  lpTok.setLocation(loc);
+  lpTok.setKind(tok::l_paren);
+  tokens.push_back(lpTok);
+
+  // First loop emits the literals. For f-literals it creates a new string-literal token to prepare for the regular concatenation
+  // in the recursive call.
+  for (const Token &t : StringToks) {
+      if (t.isFLiteral()) {
+        Token litTok = t;
+        litTok.clearFlag(Token::IsFLiteral);
+        litTok.setLiteralData(t.getLiteralData());    // Note: In t, which is a f-literal, the actual chars are in FLiteralData::Text.
+        tokens.push_back(litTok);
+      }
+      else
+          tokens.push_back(t);        // Regular literals are already as they should
+  }
+
+  // Second loop appends all the extracted expressions. These already have leading commas and source location set up.
+  for (const Token &Tok : StringToks) {
+      if (Tok.isFLiteral())
+        tokens.insert(
+          tokens.end(), Tok.getFLiteralInfo().TokenPtr,
+          Tok.getFLiteralInfo().TokenPtr + Tok.getFLiteralInfo().TokenCount);
+  }
+
+  // Trailing rparen.
+  Token rpTok;
+  rpTok.startToken();
+  rpTok.setLocation(loc);
+  rpTok.setKind(tok::r_paren);
+  tokens.push_back(rpTok);
+
+  // Inject the upcoming token last to not change the token order.
+  tokens.push_back(Tok);
+
+  // Convert vector to unique_ptr and push the token sequence back into the preprocessor
+
+  auto tokStore = std::make_unique<Token[]>(tokens.size());
+  std::copy(tokens.begin(), tokens.end(), tokStore.get());
+
+  PP.EnterTokenStream(std::move(tokStore), tokens.size(), true, false);
+  ConsumeAnyToken();   // Consume the token we moved last, and make the leadiung :: we injected the current token.
+  return ParseCastExpression(AnyCastExpr, false);
 }
 
 /// ParseGenericSelectionExpression - Parse a C11 generic-selection
