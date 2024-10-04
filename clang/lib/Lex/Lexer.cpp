@@ -2604,7 +2604,13 @@ bool clang::Lexer::LexStringOrCharLiteral(Token &Result, const char *CurPtr,
   return false;
 }
 
-
+// gcc does not seem to be able to find the generic operator new in Allocator.h
+void *operator new(
+    size_t Size,
+    llvm::BumpPtrAllocator &Allocator) {
+  return Allocator.Allocate(Size, std::min((size_t)llvm::NextPowerOf2(Size),
+                                           alignof(std::max_align_t)));
+}
 
 bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind Kind) {
   const char *litStart = BufferPtr;   // Before all prefixes
