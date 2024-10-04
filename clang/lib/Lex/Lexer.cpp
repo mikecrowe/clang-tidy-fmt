@@ -2384,8 +2384,8 @@ bool clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char
         lit += *BufferPtr++;
     };
 
-    while (*BufferPtr != '}') {
-      if (*BufferPtr == '{') { // Nested field starts
+    while (true) {
+      if (*BufferPtr == '{') { // Nested expression-field starts
         toLit();
         if (*BufferPtr != '{') {
           // Add a comma in the token stream before the expression tokens.
@@ -2406,18 +2406,15 @@ bool clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char
       } 
       else if (*BufferPtr == '}') {
         toLit();
-        if (*BufferPtr != '}') {
-          Diag(BufferPtr, diag::err_unescaped_r_brace);
-          return false;
-        }
+        if (*BufferPtr != '}')
+          return true;
       } 
       else
         toLit(); // Transfer other formatting argument char to the resulting
                  // string.
     }
-    toLit(); // Transfer the final } and advance PufferPtr.
-    return true;
 }
+
 
 Token clang::Lexer::processExpression(std::vector<Token>& tokens, bool allowComma)
 {

@@ -203,6 +203,7 @@ namespace std {
 #include <__format/format_functions.h>
 #include <__format/format_parse_context.h>
 #include <__format/format_string.h>
+#include <__format/formatted_string.h>
 #include <__format/format_to_n_result.h>
 #include <__format/formatter.h>
 #include <__format/formatter_bool.h>

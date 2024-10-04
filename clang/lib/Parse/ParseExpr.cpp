@@ -3426,7 +3426,7 @@ ExprResult Parser::ParseStringLiteralExpression(bool AllowUserDefinedLiteral,
   Token fmtTok;
   fmtTok.startToken();
   fmtTok.setLocation(loc);
-  fmtTok.setIdentifierInfo(PP.getIdentifierInfo("format"));
+  fmtTok.setIdentifierInfo(PP.getIdentifierInfo("make_formatted_string"));
   fmtTok.setKind(tok::identifier);
   tokens.push_back(fmtTok);
 
