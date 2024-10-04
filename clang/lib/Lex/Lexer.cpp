@@ -2706,7 +2706,7 @@ bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind
 
   // Fill in the literalPos token with the remaining string. But to keep its contents first allocate
   // using the bumpAllocator from PP.
-  char *lit = new (PP->getPreprocessorAllocator()) char[resultingLiteral.size() + 1];
+  char *lit = PP->getPreprocessorAllocator().Allocate<char>(resultingLiteral.size() + 1);
   memcpy(lit, resultingLiteral.c_str(), resultingLiteral.size() + 1);
 
   // The completed lexing is represented by a MacroInfo object which is pushed
@@ -2715,7 +2715,7 @@ bool clang::Lexer::LexFLiteral(Token &Result, const char *CurPtr, tok::TokenKind
 
   BufferPtr = CurPtr;
 
-  Token* tokStore = new (PP->getPreprocessorAllocator()) Token[tokens.size()];
+  Token* tokStore = PP->getPreprocessorAllocator().Allocate<Token>(tokens.size());
   std::copy(tokens.begin(), tokens.end(), tokStore);
 
   Token::FLiteralInfo* fli = new (PP->getPreprocessorAllocator()) Token::FLiteralInfo;
@@ -2863,7 +2863,8 @@ bool clang::Lexer::LexRawFLiteral(Token &Result, const char *CurPtr, tok::TokenK
 
   // Fill in the literalPos token with the remaining string. But to keep its contents first allocate
   // using the bumpAllocator from PP.
-  char *lit = new (PP->getPreprocessorAllocator()) char[resultingLiteral.size() + 1];
+  char *lit = PP->getPreprocessorAllocator().Allocate<char>(
+      resultingLiteral.size() + 1);
   memcpy(lit, resultingLiteral.c_str(), resultingLiteral.size() + 1);
 
   // The completed lexing is represented by a MacroInfo object which is pushed
@@ -2872,7 +2873,8 @@ bool clang::Lexer::LexRawFLiteral(Token &Result, const char *CurPtr, tok::TokenK
 
   BufferPtr = CurPtr;
 
-  Token* tokStore = new (PP->getPreprocessorAllocator()) Token[tokens.size()];
+  Token *tokStore =
+      PP->getPreprocessorAllocator().Allocate<Token>(tokens.size());
   std::copy(tokens.begin(), tokens.end(), tokStore);
 
   Token::FLiteralInfo* fli = new (PP->getPreprocessorAllocator()) Token::FLiteralInfo;
