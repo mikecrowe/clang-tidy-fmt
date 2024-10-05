@@ -52,16 +52,13 @@ void uses() {
   // expected-note@+1{{previous clause is here}}
 #pragma acc kernels device_type(*) if_present
   while(1);
-  // expected-error@+2{{OpenACC clause 'seq' may not follow a 'device_type' clause in a compute construct}}
-  // expected-note@+1{{previous clause is here}}
+  // expected-error@+1{{OpenACC 'seq' clause is not valid on 'kernels' directive}}
 #pragma acc kernels device_type(*) seq
   while(1);
-  // expected-error@+2{{OpenACC clause 'independent' may not follow a 'device_type' clause in a compute construct}}
-  // expected-note@+1{{previous clause is here}}
+  // expected-error@+1{{OpenACC 'independent' clause is not valid on 'kernels' directive}}
 #pragma acc kernels device_type(*) independent
   while(1);
-  // expected-error@+2{{OpenACC clause 'auto' may not follow a 'device_type' clause in a compute construct}}
-  // expected-note@+1{{previous clause is here}}
+  // expected-error@+1{{OpenACC 'auto' clause is not valid on 'kernels' directive}}
 #pragma acc kernels device_type(*) auto
   while(1);
   // expected-error@+2{{OpenACC clause 'worker' may not follow a 'device_type' clause in a compute construct}}
@@ -191,8 +188,7 @@ void uses() {
   // expected-note@+1{{previous clause is here}}
 #pragma acc serial device_type(*) reduction(+:Var)
   while(1);
-  // expected-error@+2{{OpenACC clause 'collapse' may not follow a 'device_type' clause in a compute construct}}
-  // expected-note@+1{{previous clause is here}}
+  // expected-error@+1{{OpenACC 'collapse' clause is not valid on 'kernels' directive}}
 #pragma acc kernels device_type(*) collapse(1)
   while(1);
   // expected-error@+2{{OpenACC clause 'bind' may not follow a 'device_type' clause in a compute construct}}
@@ -215,8 +211,7 @@ void uses() {
   while(1);
 #pragma acc kernels device_type(*) async
   while(1);
-  // expected-error@+2{{OpenACC clause 'tile' may not follow a 'device_type' clause in a compute construct}}
-  // expected-note@+1{{previous clause is here}}
+  // expected-error@+1{{OpenACC 'tile' clause is not valid on 'kernels' directive}}
 #pragma acc kernels device_type(*) tile(Var, 1)
   while(1);
   // expected-error@+2{{OpenACC clause 'gang' may not follow a 'dtype' clause in a compute construct}}

@@ -838,8 +838,7 @@ define void @user() {
 ; TUNIT: Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(write)
 ; TUNIT-LABEL: define {{[^@]+}}@user
 ; TUNIT-SAME: () #[[ATTR5]] {
-; TUNIT-NEXT:    [[TMP1:%.*]] = addrspacecast ptr addrspacecast (ptr addrspace(3) @ConstAS3Ptr to ptr) to ptr addrspace(3)
-; TUNIT-NEXT:    store i32 0, ptr addrspace(3) [[TMP1]], align 4
+; TUNIT-NEXT:    store i32 0, ptr addrspacecast (ptr addrspace(3) @ConstAS3Ptr to ptr), align 4
 ; TUNIT-NEXT:    ret void
 ;
 ; CGSCC: Function Attrs: mustprogress nofree nosync nounwind willreturn memory(write)
@@ -1475,34 +1474,6 @@ define void @entry() {
 entry:
   call void @broker(ptr @indirect)
   ret void
-}
-
-define i1 @constexpr_icmp1() {
-; TUNIT: Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(none)
-; TUNIT-LABEL: define {{[^@]+}}@constexpr_icmp1
-; TUNIT-SAME: () #[[ATTR2]] {
-; TUNIT-NEXT:    ret i1 icmp ne (ptr addrspacecast (ptr addrspace(4) @str to ptr), ptr null)
-;
-; CGSCC: Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(none)
-; CGSCC-LABEL: define {{[^@]+}}@constexpr_icmp1
-; CGSCC-SAME: () #[[ATTR1]] {
-; CGSCC-NEXT:    ret i1 icmp ne (ptr addrspacecast (ptr addrspace(4) @str to ptr), ptr null)
-;
-  ret i1 icmp ne (ptr addrspacecast (ptr addrspace(4) @str to ptr), ptr null)
-}
-
-define i1 @constexpr_icmp2() {
-; TUNIT: Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(none)
-; TUNIT-LABEL: define {{[^@]+}}@constexpr_icmp2
-; TUNIT-SAME: () #[[ATTR2]] {
-; TUNIT-NEXT:    ret i1 icmp eq (ptr addrspacecast (ptr addrspace(4) @str to ptr), ptr null)
-;
-; CGSCC: Function Attrs: mustprogress nofree norecurse nosync nounwind willreturn memory(none)
-; CGSCC-LABEL: define {{[^@]+}}@constexpr_icmp2
-; CGSCC-SAME: () #[[ATTR1]] {
-; CGSCC-NEXT:    ret i1 icmp eq (ptr addrspacecast (ptr addrspace(4) @str to ptr), ptr null)
-;
-  ret i1 icmp eq (ptr addrspacecast (ptr addrspace(4) @str to ptr), ptr null)
 }
 
 define i8 @switch(i1 %c1, i1 %c2) {

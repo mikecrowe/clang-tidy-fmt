@@ -9,8 +9,8 @@
 #include "mlir/Dialect/Utils/StaticValueUtils.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/Support/LLVM.h"
-#include "mlir/Support/MathExtras.h"
 #include "llvm/ADT/APSInt.h"
+#include "llvm/Support/MathExtras.h"
 
 namespace mlir {
 
@@ -124,7 +124,7 @@ getConstantIntValues(ArrayRef<OpFoldResult> ofrs) {
     auto cv = getConstantIntValue(ofr);
     if (!cv.has_value())
       failed = true;
-    return cv.has_value() ? cv.value() : 0;
+    return cv.value_or(0);
   });
   if (failed)
     return std::nullopt;
@@ -248,7 +248,7 @@ std::optional<int64_t> constantTripCount(OpFoldResult lb, OpFoldResult ub,
   if (!stepConstant)
     return std::nullopt;
 
-  return mlir::ceilDiv(*ubConstant - *lbConstant, *stepConstant);
+  return llvm::divideCeilSigned(*ubConstant - *lbConstant, *stepConstant);
 }
 
 bool hasValidSizesOffsets(SmallVector<int64_t> sizesOrOffsets) {

@@ -5,6 +5,7 @@ import("//llvm/lib/Target/targets.gni")
 import("//llvm/triples.gni")
 import("//llvm/utils/gn/build/libs/pthread/enable.gni")
 import("//llvm/utils/gn/build/libs/zlib/enable.gni")
+import("//llvm/utils/gn/build/libs/zstd/enable.gni")
 import("//llvm/utils/gn/build/write_cmake_config.gni")
 import("//llvm/utils/llvm-lit/lit_path_function.gni")
 import("//llvm/version.gni")
@@ -64,7 +65,6 @@ write_lit_config("lit_site_cfg") {
     "CMAKE_C_COMPILER=cc",
     "ENABLE_BACKTRACES=1",
     "ENABLE_SHARED=0",
-    "LLVM_ENABLE_ZSTD=0",
     "LLVM_EXTERNAL_LIT=",
     "LLVM_HOST_TRIPLE=$llvm_current_triple",
     "LLVM_LIT_TOOLS_DIR=",  # Intentionally empty, matches cmake build.
@@ -94,6 +94,12 @@ write_lit_config("lit_site_cfg") {
     extra_values += [ "LLVM_ENABLE_ZLIB=0" ]  # Must be 0.
   }
 
+  if (llvm_enable_zstd) {
+    extra_values += [ "LLVM_ENABLE_ZSTD=1" ]
+  } else {
+    extra_values += [ "LLVM_ENABLE_ZSTD=0" ]  # Must be 0.
+  }
+
   if (host_cpu == "x64") {
     extra_values += [ "HOST_ARCH=x86_64" ]
   } else if (host_cpu == "arm64") {
@@ -118,13 +124,13 @@ write_lit_config("lit_site_cfg") {
       "CMAKE_LIBRARY_OUTPUT_DIRECTORY=" + rebase_path("$root_out_dir/bin", dir),
       "LLVM_LIT_ERRC_MESSAGES=no such file or directory;is a directory;" +
           "invalid argument;permission denied",
-      "PERL_EXECUTABLE="
+      "PERL_EXECUTABLE=",
     ]
   } else {
     extra_values += [
       "CMAKE_LIBRARY_OUTPUT_DIRECTORY=" + rebase_path("$root_out_dir/lib", dir),
       "LLVM_LIT_ERRC_MESSAGES=",
-      "PERL_EXECUTABLE=/usr/bin/perl"
+      "PERL_EXECUTABLE=/usr/bin/perl",
     ]
   }
 
@@ -165,7 +171,6 @@ group("test") {
     "//clang/tools/clang-installapi",
     "//clang/tools/clang-offload-bundler",
     "//clang/tools/clang-refactor",
-    "//clang/tools/clang-rename",
     "//clang/tools/clang-repl",
     "//clang/tools/clang-scan-deps",
     "//clang/tools/diagtool",
@@ -195,6 +200,7 @@ group("test") {
     "//llvm/tools/llvm-readobj:symlinks",
     "//llvm/tools/llvm-readtapi:symlinks",
     "//llvm/tools/llvm-symbolizer:symlinks",
+    "//llvm/tools/obj2yaml",
     "//llvm/tools/opt",
     "//llvm/tools/yaml2obj",
     "//llvm/utils/FileCheck",

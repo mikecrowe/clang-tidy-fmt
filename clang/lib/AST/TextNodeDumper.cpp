@@ -381,6 +381,11 @@ void TextNodeDumper::Visit(const OMPClause *C) {
     OS << " <implicit>";
 }
 
+void TextNodeDumper::VisitOpenACCAsteriskSizeExpr(
+    const OpenACCAsteriskSizeExpr *E) {
+  // Nothing to do here, only location exists, and that is printed elsewhere.
+}
+
 void TextNodeDumper::Visit(const OpenACCClause *C) {
   if (!C) {
     ColorScope Color(OS, ShowColors, NullColor);
@@ -398,11 +403,13 @@ void TextNodeDumper::Visit(const OpenACCClause *C) {
       OS << '(' << cast<OpenACCDefaultClause>(C)->getDefaultClauseKind() << ')';
       break;
     case OpenACCClauseKind::Async:
+    case OpenACCClauseKind::Auto:
     case OpenACCClauseKind::Attach:
     case OpenACCClauseKind::Copy:
     case OpenACCClauseKind::PCopy:
     case OpenACCClauseKind::PresentOrCopy:
     case OpenACCClauseKind::If:
+    case OpenACCClauseKind::Independent:
     case OpenACCClauseKind::DevicePtr:
     case OpenACCClauseKind::FirstPrivate:
     case OpenACCClauseKind::NoCreate:
@@ -411,11 +418,19 @@ void TextNodeDumper::Visit(const OpenACCClause *C) {
     case OpenACCClauseKind::Present:
     case OpenACCClauseKind::Private:
     case OpenACCClauseKind::Self:
+    case OpenACCClauseKind::Seq:
+    case OpenACCClauseKind::Tile:
     case OpenACCClauseKind::VectorLength:
       // The condition expression will be printed as a part of the 'children',
       // but print 'clause' here so it is clear what is happening from the dump.
       OS << " clause";
       break;
+    case OpenACCClauseKind::Collapse:
+      OS << " clause";
+      if (cast<OpenACCCollapseClause>(C)->hasForce())
+        OS << ": force";
+      break;
+
     case OpenACCClauseKind::CopyIn:
     case OpenACCClauseKind::PCopyIn:
     case OpenACCClauseKind::PresentOrCopyIn:
@@ -955,6 +970,9 @@ void TextNodeDumper::dumpTemplateArgument(const TemplateArgument &TA) {
   }
   OS << " '" << Str << "'";
 
+  if (!Context)
+    return;
+
   if (TemplateArgument CanonTA = Context->getCanonicalTemplateArgument(TA);
       !CanonTA.structurallyEquals(TA)) {
     llvm::SmallString<128> CanonStr;
@@ -1134,17 +1152,19 @@ void TextNodeDumper::dumpTemplateName(TemplateName TN, StringRef Label) {
         llvm::raw_svector_ostream SS(Str);
         TN.print(SS, PrintPolicy);
       }
-      OS << " '" << Str << "'";
+      OS << "'" << Str << "'";
 
-      if (TemplateName CanonTN = Context->getCanonicalTemplateName(TN);
-          CanonTN != TN) {
-        llvm::SmallString<128> CanonStr;
-        {
-          llvm::raw_svector_ostream SS(CanonStr);
-          CanonTN.print(SS, PrintPolicy);
+      if (Context) {
+        if (TemplateName CanonTN = Context->getCanonicalTemplateName(TN);
+            CanonTN != TN) {
+          llvm::SmallString<128> CanonStr;
+          {
+            llvm::raw_svector_ostream SS(CanonStr);
+            CanonTN.print(SS, PrintPolicy);
+          }
+          if (CanonStr != Str)
+            OS << ":'" << CanonStr << "'";
         }
-        if (CanonStr != Str)
-          OS << ":'" << CanonStr << "'";
       }
     }
     dumpBareTemplateName(TN);
@@ -1188,6 +1208,18 @@ void TextNodeDumper::dumpBareTemplateName(TemplateName TN) {
       AddChild("parameter", [=] { Visit(P); });
     dumpDeclRef(STS->getAssociatedDecl(), "associated");
     dumpTemplateName(STS->getReplacement(), "replacement");
+    return;
+  }
+  case TemplateName::DeducedTemplate: {
+    OS << " deduced";
+    const DeducedTemplateStorage *DTS = TN.getAsDeducedTemplateName();
+    dumpTemplateName(DTS->getUnderlying(), "underlying");
+    AddChild("defaults", [=] {
+      auto [StartPos, Args] = DTS->getDefaultArguments();
+      OS << " start " << StartPos;
+      for (const TemplateArgument &Arg : Args)
+        AddChild([=] { Visit(Arg, SourceRange()); });
+    });
     return;
   }
   // FIXME: Implement these.
@@ -1851,6 +1883,9 @@ void TextNodeDumper::VisitVectorType(const VectorType *T) {
     OS << " fixed-length rvv data vector";
     break;
   case VectorKind::RVVFixedLengthMask:
+  case VectorKind::RVVFixedLengthMask_1:
+  case VectorKind::RVVFixedLengthMask_2:
+  case VectorKind::RVVFixedLengthMask_4:
     OS << " fixed-length rvv mask vector";
     break;
   }
@@ -2378,8 +2413,8 @@ void TextNodeDumper::VisitNamespaceDecl(const NamespaceDecl *D) {
     OS << " inline";
   if (D->isNested())
     OS << " nested";
-  if (!D->isOriginalNamespace())
-    dumpDeclRef(D->getOriginalNamespace(), "original");
+  if (!D->isFirstDecl())
+    dumpDeclRef(D->getFirstDecl(), "original");
 }
 
 void TextNodeDumper::VisitUsingDirectiveDecl(const UsingDirectiveDecl *D) {
@@ -2686,6 +2721,8 @@ void TextNodeDumper::VisitAccessSpecDecl(const AccessSpecDecl *D) {
 void TextNodeDumper::VisitFriendDecl(const FriendDecl *D) {
   if (TypeSourceInfo *T = D->getFriendType())
     dumpType(T->getType());
+  if (D->isPackExpansion())
+    OS << "...";
 }
 
 void TextNodeDumper::VisitObjCIvarDecl(const ObjCIvarDecl *D) {
@@ -2866,6 +2903,26 @@ void TextNodeDumper::VisitHLSLBufferDecl(const HLSLBufferDecl *D) {
   dumpName(D);
 }
 
+void TextNodeDumper::VisitHLSLOutArgExpr(const HLSLOutArgExpr *E) {
+  OS << (E->isInOut() ? " inout" : " out");
+}
+
 void TextNodeDumper::VisitOpenACCConstructStmt(const OpenACCConstructStmt *S) {
   OS << " " << S->getDirectiveKind();
+}
+void TextNodeDumper::VisitOpenACCLoopConstruct(const OpenACCLoopConstruct *S) {
+
+  if (S->isOrphanedLoopConstruct())
+    OS << " <orphan>";
+  else
+    OS << " parent: " << S->getParentComputeConstruct();
+}
+
+void TextNodeDumper::VisitEmbedExpr(const EmbedExpr *S) {
+  AddChild("begin", [=] { OS << S->getStartingElementPos(); });
+  AddChild("number of elements", [=] { OS << S->getDataElementCount(); });
+}
+
+void TextNodeDumper::VisitAtomicExpr(const AtomicExpr *AE) {
+  OS << ' ' << AE->getOpAsString();
 }

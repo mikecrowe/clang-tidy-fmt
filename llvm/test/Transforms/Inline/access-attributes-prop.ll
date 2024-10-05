@@ -189,9 +189,10 @@ define dso_local void @foo2_through_obj(ptr %p, ptr %p2) {
 
 define dso_local void @foo_byval_readonly(ptr readonly %p) {
 ; CHECK-LABEL: define {{[^@]+}}@foo_byval_readonly
-; CHECK-SAME: (ptr readonly [[P:%.*]])
-; CHECK-NEXT:   call void @bar4(ptr byval([4 x i32]) [[P]])
-; CHECK-NEXT:   ret void
+; CHECK-SAME: (ptr readonly [[P:%.*]]) {
+; CHECK-NEXT:    call void @bar4(ptr byval([4 x i32]) [[P]])
+; CHECK-NEXT:    ret void
+;
   call void @bar4(ptr byval([4 x i32]) %p)
   ret void
 }
@@ -233,7 +234,7 @@ define void @prop_param_callbase_def_2x_2(ptr %p, ptr %p2) {
 ; CHECK-SAME: (ptr [[P:%.*]], ptr [[P2:%.*]]) {
 ; CHECK-NEXT:    [[PP_I:%.*]] = getelementptr i8, ptr [[P]], i64 9
 ; CHECK-NEXT:    [[P2P_I:%.*]] = getelementptr i8, ptr [[P2]], i64 123
-; CHECK-NEXT:    call void @bar2(ptr writeonly [[P2P_I]], ptr readonly [[PP_I]])
+; CHECK-NEXT:    call void @bar2(ptr [[P2P_I]], ptr readonly [[PP_I]])
 ; CHECK-NEXT:    ret void
 ;
   call void @foo2_through_obj(ptr readonly %p, ptr writeonly %p2)
@@ -552,8 +553,30 @@ define void @prop_no_conflict_writable2(ptr %p) {
 define void @prop_byval_readonly(ptr %p) {
 ; CHECK-LABEL: define {{[^@]+}}@prop_byval_readonly
 ; CHECK-SAME: (ptr [[P:%.*]]) {
-; CHECK-NEXT:   call void @bar4(ptr byval([4 x i32]) [[P]])
-; CHECK-NEXT:   ret void
+; CHECK-NEXT:    call void @bar4(ptr byval([4 x i32]) [[P]])
+; CHECK-NEXT:    ret void
+;
   call void @foo_byval_readonly(ptr %p)
   ret void
+}
+
+define ptr @caller_bad_param_prop(ptr %p1, ptr %p2, i64 %x) {
+; CHECK-LABEL: define {{[^@]+}}@caller_bad_param_prop
+; CHECK-SAME: (ptr [[P1:%.*]], ptr [[P2:%.*]], i64 [[X:%.*]]) {
+; CHECK-NEXT:    [[TMP1:%.*]] = call ptr [[P1]](i64 [[X]], ptr [[P2]])
+; CHECK-NEXT:    ret ptr [[TMP1]]
+;
+  %1 = call ptr %p1(i64 %x, ptr %p2)
+  %2 = call ptr @callee_bad_param_prop(ptr %1)
+  ret ptr %2
+}
+
+define ptr @callee_bad_param_prop(ptr readonly %x) {
+; CHECK-LABEL: define {{[^@]+}}@callee_bad_param_prop
+; CHECK-SAME: (ptr readonly [[X:%.*]]) {
+; CHECK-NEXT:    [[R:%.*]] = tail call ptr @llvm.ptrmask.p0.i64(ptr [[X]], i64 -1)
+; CHECK-NEXT:    ret ptr [[R]]
+;
+  %r = tail call ptr @llvm.ptrmask(ptr %x, i64 -1)
+  ret ptr %r
 }

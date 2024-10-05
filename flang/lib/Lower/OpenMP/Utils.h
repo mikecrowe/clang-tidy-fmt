@@ -17,6 +17,7 @@
 
 extern llvm::cl::opt<bool> treatIndexAsSection;
 extern llvm::cl::opt<bool> enableDelayedPrivatization;
+extern llvm::cl::opt<bool> enableDelayedPrivatizationStaging;
 
 namespace fir {
 class FirOpBuilder;
@@ -98,6 +99,9 @@ semantics::Symbol *getOmpObjectSymbol(const parser::OmpObject &ompObject);
 void genObjectList(const ObjectList &objects,
                    lower::AbstractConverter &converter,
                    llvm::SmallVectorImpl<mlir::Value> &operands);
+
+void lastprivateModifierNotSupported(const omp::clause::Lastprivate &lastp,
+                                     mlir::Location loc);
 
 } // namespace omp
 } // namespace lower

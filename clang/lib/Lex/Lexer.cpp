@@ -2267,7 +2267,6 @@ bool Lexer::LexRawStringLiteral(Token &Result, const char *CurPtr,
   unsigned PrefixLen = 0;
 
   while (PrefixLen != 16 && isRawStringDelimBody(CurPtr[PrefixLen])) {
-    ++PrefixLen;
     if (!isLexingRawMode() &&
         llvm::is_contained({'$', '@', '`'}, CurPtr[PrefixLen])) {
       const char *Pos = &CurPtr[PrefixLen];
@@ -2276,6 +2275,7 @@ bool Lexer::LexRawStringLiteral(Token &Result, const char *CurPtr,
                     : diag::ext_cxx26_raw_string_literal_character_set)
           << StringRef(Pos, 1);
     }
+    ++PrefixLen;
   }
 
   // If the last character was not a '(', then we didn't lex a valid delimiter.
@@ -2982,7 +2982,9 @@ bool Lexer::LexCharConstant(Token &Result, const char *CurPtr,
                           ? diag::warn_cxx98_compat_unicode_literal
                           : diag::warn_c99_compat_unicode_literal);
     else if (Kind == tok::utf8_char_constant)
-      Diag(BufferPtr, diag::warn_cxx14_compat_u8_character_literal);
+      Diag(BufferPtr, LangOpts.CPlusPlus
+                          ? diag::warn_cxx14_compat_u8_character_literal
+                          : diag::warn_c17_compat_u8_character_literal);
   }
 
   char C = getAndAdvanceChar(CurPtr, Result);
@@ -4448,7 +4450,7 @@ LexStart:
     // Notify MIOpt that we read a non-whitespace/non-comment token.
     MIOpt.ReadToken();
 
-    if (LangOpts.CPlusPlus11) {
+    if (LangOpts.RawStringLiterals) {
       Char = getCharAndSize(CurPtr, SizeTmp);
 
       if (Char == '"')
@@ -4829,10 +4831,9 @@ LexStart:
     if (Char == '=') {
       CurPtr = ConsumeChar(CurPtr, SizeTmp, Result);
       Kind = tok::caretequal;
-    } else if (LangOpts.OpenCL && Char == '^') {
-      CurPtr = ConsumeChar(CurPtr, SizeTmp, Result);
-      Kind = tok::caretcaret;
     } else {
+      if (LangOpts.OpenCL && Char == '^')
+        Diag(CurPtr, diag::err_opencl_logical_exclusive_or);
       Kind = tok::caret;
     }
     break;

@@ -90,7 +90,7 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeWebAssemblyTarget() {
   initializeWebAssemblyMCLowerPrePassPass(PR);
   initializeWebAssemblyLowerRefTypesIntPtrConvPass(PR);
   initializeWebAssemblyFixBrTableDefaultsPass(PR);
-  initializeWebAssemblyDAGToDAGISelPass(PR);
+  initializeWebAssemblyDAGToDAGISelLegacyPass(PR);
 }
 
 //===----------------------------------------------------------------------===//
@@ -552,6 +552,7 @@ void WebAssemblyPassConfig::addPostRegAlloc() {
   disablePass(&StackMapLivenessID);
   disablePass(&PatchableFunctionID);
   disablePass(&ShrinkWrapID);
+  disablePass(&RemoveLoadsIntoFakeUsesID);
 
   // This pass hurts code size for wasm because it can generate irreducible
   // control flow.
