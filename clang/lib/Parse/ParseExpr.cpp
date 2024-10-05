@@ -3453,7 +3453,7 @@ ExprResult Parser::ParseStringLiteralExpression(bool AllowUserDefinedLiteral,
   // Inject the preamble consisting of `::std::format(`
   // TODO: Change this to std::formatted_string ctor call.
 
-     // Form the prefix tokens.
+  // Form the prefix tokens.
 
   auto loc = StringToks.front().getLocation();
   Token ccTok;
@@ -3486,15 +3486,39 @@ ExprResult Parser::ParseStringLiteralExpression(bool AllowUserDefinedLiteral,
 
   // First loop emits the literals. For f-literals it creates a new string-literal token to prepare for the regular concatenation
   // in the recursive call.
-  for (const Token &t : StringToks) {
+  for (Token &t : StringToks) {
       if (t.isFLiteral()) {
         Token litTok = t;
         litTok.clearFlag(Token::IsFLiteral);
         litTok.setLiteralData(t.getLiteralData());    // Note: In t, which is a f-literal, the actual chars are in FLiteralData::Text.
         tokens.push_back(litTok);
+      } else {
+        // Check for doubling of { and } characters. If there aren't any no
+        // action is needed and no allocation. Count the number of { and } chars
+        // to see how many extra bytes are needed.
+        unsigned braces = 0;
+        const char *str = t.getLiteralData();
+        for (unsigned i = 0; i < t.getLength(); i++) {
+          if (str[i] == '{' || str[i] == '}')
+            braces++;
+        }
+        if (braces > 0) { // Rearranging needed to inject doubled braces.
+          char *newStr = PP.getPreprocessorAllocator().Allocate<char>(
+              t.getLength() + braces);
+          char *dest = newStr;
+          for (unsigned i = 0; i < t.getLength(); i++) {
+            *dest++ = str[i];
+            if (str[i] == '{')
+              *dest++ = '{';
+            if (str[i] == '}')
+              *dest++ = '}';
+          }
+
+          t.setLiteralData(newStr);
+          t.setLength(t.getLength() + braces);
+        }
+        tokens.push_back(t); // Add the literal
       }
-      else
-          tokens.push_back(t);        // Regular literals are already as they should
   }
 
   // Second loop appends all the extracted expressions. These already have leading commas and source location set up.

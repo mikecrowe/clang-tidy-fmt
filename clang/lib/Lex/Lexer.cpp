@@ -2380,14 +2380,10 @@ bool clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char
 
     lit.push_back(':');
 
-    // If : check for nested fields in the format-spec. This works character by character.
-    auto toLit = [&] {
-        lit += *BufferPtr++;
-    };
-
+    // If : check for nested fields in the format-spec. This works character by character. Also replace {{ with { and }} with }.
     while (true) {
       if (*BufferPtr == '{') { // Nested expression-field starts
-        toLit();
+        lit.push_back(*BufferPtr++);
         if (*BufferPtr != '{') {
           // Add a comma in the token stream before the expression tokens.
           cTok.setLocation(getSourceLocation());
@@ -2404,15 +2400,19 @@ bool clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char
 
           lit.push_back('}'); // The } after the nested expression field
         }
+        else
+          BufferPtr++;          // Pass second {, thus getting rid of the doubling.
       } 
       else if (*BufferPtr == '}') {
-        toLit();
+        lit.push_back(*BufferPtr++);
         if (*BufferPtr != '}')
           return true;
+        else
+          BufferPtr++;          // Pass second }, thus getting rid of the doubling.
       } 
       else
-        toLit(); // Transfer other formatting argument char to the resulting
-                 // string.
+        // Transfer other formatting argument char to the resulting string.
+        lit.push_back(*BufferPtr++);
     }
 }
 
