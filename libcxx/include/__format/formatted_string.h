@@ -10,6 +10,9 @@
 #ifndef _LIBCPP___FORMAT_FORMATTED_STRING_H
 #define _LIBCPP___FORMAT_FORMATTED_STRING_H
 
+#include <iostream>
+#include <iterator>
+
 _LIBCPP_BEGIN_NAMESPACE_STD
 
 template <typename CharT> struct __select_format_context {};
