@@ -2602,6 +2602,20 @@ bool clang::Lexer::LexStringOrCharLiteral(Token &Result, const char *CurPtr,
             StringLiteralKind);
     }
   }
+  else if (StringLiteralKind == tok::string_literal || StringLiteralKind == tok::wide_string_literal) {
+      unsigned SizeTmp;
+      char Char = getCharAndSize(CurPtr, SizeTmp);
+
+      if (Char == '"')
+          return LexStringLiteral(Result, ConsumeChar(CurPtr, SizeTmp, Result),
+                                  StringLiteralKind);
+
+    // character constant
+      if (Char == '\'')
+          return LexCharConstant(Result, ConsumeChar(CurPtr, SizeTmp, Result),
+                                 CharLiteralKind);
+  }
+
   return false;
 }
 
