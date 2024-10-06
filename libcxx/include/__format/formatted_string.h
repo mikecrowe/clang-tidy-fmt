@@ -82,6 +82,4 @@ void println(const basic_formatted_string<wchar_t, Args...>& fs) {
 
 _LIBCPP_END_NAMESPACE_STD
 
-#error here
-
 #endif
