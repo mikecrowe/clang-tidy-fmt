@@ -166,6 +166,13 @@ template<class... Args>                                                         
   void println(ostream& os, format_string<Args...> fmt, Args&&... args);
 void println(ostream& os);                                                                             // since C++26
 
+ostream& operator<<(ostream& os, const formated_string<Args...>& fs);                                  // since C++26
+
+template<class... Args>                                                                                // since C++26
+void print(ostream& os, const formated_string<Args...>& fs);
+template<class... Args>                                                                                // since C++26
+void println(ostream& os, const formated_string<Args...>& fs);
+
 void vprint_unicode(ostream& os, string_view fmt, format_args args);                                   // since C++23
 void vprint_nonunicode(ostream& os, string_view fmt, format_args args);                                // since C++23
 }  // std

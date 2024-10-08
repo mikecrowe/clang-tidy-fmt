@@ -397,6 +397,49 @@ _LIBCPP_HIDE_FROM_ABI inline void vprint_nonunicode(string_view __fmt, format_ar
 
 #endif // _LIBCPP_STD_VER >= 23
 
+#if _LIBCPP_STD_VER >= 23       // Should be 26
+
+template <typename... _Args>
+_LIBCPP_HIDE_FROM_ABI void print(FILE* __stream, const formatted_string<_Args...>& fs) {
+#  ifndef _LIBCPP_HAS_NO_UNICODE
+  // Note the wording in the Standard is inefficient. The output of
+  // std::format is a std::string which is then copied. This solution
+  // just appends a newline at the end of the output.
+    if constexpr (__print::__use_unicode_execution_charset)
+        __print::__vprint_unicode(__stream, fs.literal, fs.args, false);
+    else
+        __print::__vprint_nonunicode(__stream, fs.literal, fs.args, false);
+#  else  // _LIBCPP_HAS_NO_UNICODE
+    __print::__vprint_nonunicode(__stream, fs.literal, fs.args, false);
+#  endif // _LIBCPP_HAS_NO_UNICODE
+}
+template <typename... _Args>
+_LIBCPP_HIDE_FROM_ABI void println(FILE* __stream, const formatted_string<_Args...>& fs) {
+#  ifndef _LIBCPP_HAS_NO_UNICODE
+  // Note the wording in the Standard is inefficient. The output of
+  // std::format is a std::string which is then copied. This solution
+  // just appends a newline at the end of the output.
+    if constexpr (__print::__use_unicode_execution_charset)
+        __print::__vprint_unicode(__stream, fs.literal, fs.args, true);
+    else
+        __print::__vprint_nonunicode(__stream, fs.literal, fs.args, true);
+#  else  // _LIBCPP_HAS_NO_UNICODE
+    __print::__vprint_nonunicode(__stream, fs.literal, fs.args, true);
+#  endif // _LIBCPP_HAS_NO_UNICODE
+}
+
+template <typename... _Args>
+_LIBCPP_HIDE_FROM_ABI void print(const basic_formatted_string<char, _Args...>& fs) {
+    print(stdout, fs);
+}
+
+template <typename... _Args>
+_LIBCPP_HIDE_FROM_ABI void println(const basic_formatted_string<char, _Args...>& fs) {
+    println(stdout, fs);
+}
+
+#endif // _LIBCPP_STD_VER >= 26
+
 _LIBCPP_END_NAMESPACE_STD
 
 #endif // _LIBCPP_PRINT
