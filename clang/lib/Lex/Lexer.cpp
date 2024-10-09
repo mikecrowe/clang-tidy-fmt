@@ -2360,9 +2360,17 @@ bool clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char
 
     // Handle the extra feature that an expression ending with = is its own label (as in Python). No expression ending with =
     // is valid anyway. Well, this is not strictly true: &MyClass::operator= is a valid expression but for the greater good we ignore this.
-    // If anyone wants to emit this operator's address they can use a parenthesis. (Or we could specify that 'opewrator=' does not cáuse
+    // If anyone wants to emit this operator's address they can use a parenthesis. (Or we could specify that 'operator=' does not cause
     // label output.
-    if (tokens.back().getKind() == tok::equal && (tokens.size() < 2 || tokens[tokens.size() - 2].getKind() != tok::kw_operator)) {
+    // As you can't format a member function pointer address anyway it is mostly a matter of which error message you want. By not
+    // checking for an operator token we get an error message about an expression ending with the token operator, which is probably
+    // more understandable as users will soon realize that the = was treated as a label indicator.
+    if (tokens.back().getKind() == tok::equal) {
+        if (tokens.size() >= 2 && tokens[tokens.size() - 2].getKind() == tok::kw_operator) {
+            Diag(BufferPtr - 1, diag::err_operator_equal_end);
+            return false;
+        }
+                
         lit.append(litStart, exprStart - 1);     // Exclude the { which is to come after the label
         lit.append(exprStart, BufferPtr - 1);    // Add entire expression including the = and any spaces after that to the literal.
         lit += "{";                              // Add the { after the = and any trailing spaces.

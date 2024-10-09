@@ -88,6 +88,7 @@ def warn_c23_keyword : Warning<"'%0' is a keyword in C23">,
 def ext_unterminated_char_or_string : ExtWarn<
   "missing terminating %select{'|'\"'}0 character">, InGroup<InvalidPPToken>;
 
+def err_operator_equal_end : Error<"expression field ends in 'operator='. This is not allowed as expressions ending in = indicate that the expression is its own label">;
 def err_nested_format_spec : Error<"format specifier in nested expression field">;
 def err_unmatched_paren : Error<"unmatched %0 in expression field">;
 def err_incomplete_ternary : Error<"ternary ? operator without matching : in expression field">;
