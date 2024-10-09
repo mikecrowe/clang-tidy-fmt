@@ -2347,81 +2347,108 @@ bool Lexer::LexRawStringLiteral(Token &Result, const char *CurPtr,
 // Process and extraction field in a f-literal. Add the tokens of the expresion(s) to tokens, and add the literal fragments to lit,
 // if any. Start at BufferPtr, and leave it after the field, i.e. after the } of the extraction field. litstart is the position after the
 // starting " of the literal or the } of the previous extraction field.
-bool clang::Lexer::processExtractionField(std::vector<Token>& tokens, const char* litStart, std::string& lit) {
-    // Add the comma that should go before each extracted expression.    
-    Token cTok;
-    cTok.startToken();
-    cTok.setKind(tok::comma);
-    cTok.setLocation(getSourceLocation());
-    tokens.push_back(cTok);
+bool clang::Lexer::processExtractionField(std::vector<Token> &tokens,
+                                          const char *litStart,
+                                          std::string &lit) {
+  // Add the comma that should go before each extracted expression.
+  Token cTok;
+  cTok.startToken();
+  cTok.setKind(tok::comma);
+  cTok.setLocation(getSourceLocation());
+  tokens.push_back(cTok);
 
-    const char* exprStart = BufferPtr;
-    Token terminator = processExpression(tokens, false);     // Parse the part before the colon or }, returning the : or } token itself.
+  Token lpTok;
+  lpTok.startToken();
+  lpTok.setLocation(getSourceLocation());
+  lpTok.setKind(tok::l_paren);
+  tokens.push_back(lpTok);
 
-    // Handle the extra feature that an expression ending with = is its own label (as in Python). No expression ending with =
-    // is valid anyway. Well, this is not strictly true: &MyClass::operator= is a valid expression but for the greater good we ignore this.
-    // If anyone wants to emit this operator's address they can use a parenthesis. (Or we could specify that 'operator=' does not cause
-    // label output.
-    // As you can't format a member function pointer address anyway it is mostly a matter of which error message you want. By not
-    // checking for an operator token we get an error message about an expression ending with the token operator, which is probably
-    // more understandable as users will soon realize that the = was treated as a label indicator.
-    if (tokens.back().getKind() == tok::equal) {
-        if (tokens.size() >= 2 && tokens[tokens.size() - 2].getKind() == tok::kw_operator) {
-            Diag(BufferPtr - 1, diag::err_operator_equal_end);
-            return false;
+  Token rpTok;
+  rpTok.startToken();
+  rpTok.setLocation(getSourceLocation());
+  rpTok.setKind(tok::r_paren);
+
+  const char *exprStart = BufferPtr;
+  Token terminator =
+      processExpression(tokens, false); // Parse the part before the colon or },
+                                        // returning the : or } token itself.
+
+  // Handle the extra feature that an expression ending with = is its own
+  // label (as in Python). No expression ending with = is valid anyway. Well,
+  // this is not strictly true: &MyClass::operator= is a valid expression but
+  // for the greater good we ignore this. If anyone wants to emit this
+  // operator's address they can use a parenthesis. (Or we could specify that
+  // 'operator=' does not cause label output. As you can't format a member
+  // function pointer address anyway it is mostly a matter of which error
+  // message you want. By not checking for an operator token we get an error
+  // message about an expression ending with the token operator, which is
+  // probably more understandable as users will soon realize that the = was
+  // treated as a label indicator.
+  if (tokens.back().getKind() == tok::equal) {
+    if (tokens.size() >= 2 &&
+        tokens[tokens.size() - 2].getKind() == tok::kw_operator) {
+      Diag(BufferPtr - 1, diag::err_operator_equal_end);
+      return false;
+    }
+
+    lit.append(litStart,
+               exprStart - 1); // Exclude the { which is to come after the label
+    lit.append(exprStart,
+               BufferPtr - 1); // Add entire expression including the = and
+                               // any spaces after that to the literal.
+    lit += "{";                // Add the { after the = and any trailing spaces.
+    tokens.pop_back();         // Remove the =
+  } else {
+    lit.append(litStart,
+               exprStart); // Add entire expression including the = and any
+                           // spaces after that to the literal.
+  }
+
+  tokens.push_back(rpTok);
+  if (terminator.getKind() !=
+      tok::colon) { // This includes unknown, i.e. a " before }
+    assert(terminator.getKind() == tok::r_brace ||
+           terminator.getKind() == tok::unknown);
+    lit.push_back('}');
+    return terminator.getKind() != tok::unknown;
+  }
+
+  lit.push_back(':');
+
+  // If : check for nested fields in the format-spec. This works character by
+  // character. Also replace {{ with { and }} with }.
+  while (true) {
+    if (*BufferPtr == '{') { // Nested expression-field starts
+      lit.push_back(*BufferPtr++);
+      if (*BufferPtr != '{') {
+        // Add a comma in the token stream before the expression tokens.
+        cTok.setLocation(getSourceLocation());
+        tokens.push_back(cTok);
+        tokens.push_back(lpTok);
+        Token terminator = processExpression(tokens, false);
+        if (terminator.getKind() == tok::unknown)
+          return false;
+
+        if (terminator.getKind() != tok::r_brace) {
+          // Colon not allowed inside nested expression-field.
+          Diag(BufferPtr, diag::err_nested_format_spec);
+          return false;
         }
-                
-        lit.append(litStart, exprStart - 1);     // Exclude the { which is to come after the label
-        lit.append(exprStart, BufferPtr - 1);    // Add entire expression including the = and any spaces after that to the literal.
-        lit += "{";                              // Add the { after the = and any trailing spaces.
-        tokens.pop_back();      // Remove the =
-    }
-    else {
-        lit.append(litStart, exprStart);      // Add entire expression including the = and any spaces after that to the literal.
-    }
 
-    if (terminator.getKind() != tok::colon) {           // This includes unknown, i.e. a " before }
-        assert(terminator.getKind() == tok::r_brace || terminator.getKind() == tok::unknown);
-        lit.push_back('}');
-        return terminator.getKind() != tok::unknown;
-    }
-
-    lit.push_back(':');
-
-    // If : check for nested fields in the format-spec. This works character by character. Also replace {{ with { and }} with }.
-    while (true) {
-      if (*BufferPtr == '{') { // Nested expression-field starts
-        lit.push_back(*BufferPtr++);
-        if (*BufferPtr != '{') {
-          // Add a comma in the token stream before the expression tokens.
-          cTok.setLocation(getSourceLocation());
-          tokens.push_back(cTok);
-          Token terminator = processExpression(tokens, false);
-          if (terminator.getKind() == tok::unknown)
-            return false;
-
-          if (terminator.getKind() != tok::r_brace) {
-            // Colon not allowed inside nested expression-field.
-            Diag(BufferPtr, diag::err_nested_format_spec);
-            return false;
-          }
-
-          lit.push_back('}'); // The } after the nested expression field
-        }
-        else
-          BufferPtr++;          // Pass second {, thus getting rid of the doubling.
-      } 
-      else if (*BufferPtr == '}') {
-        lit.push_back(*BufferPtr++);
-        if (*BufferPtr != '}')
-          return true;
-        else
-          BufferPtr++;          // Pass second }, thus getting rid of the doubling.
-      } 
+        tokens.push_back(rpTok);
+        lit.push_back('}'); // The } after the nested expression field
+      } else
+        BufferPtr++; // Pass second {, thus getting rid of the doubling.
+    } else if (*BufferPtr == '}') {
+      lit.push_back(*BufferPtr++);
+      if (*BufferPtr != '}')
+        return true;
       else
-        // Transfer other formatting argument char to the resulting string.
-        lit.push_back(*BufferPtr++);
-    }
+        BufferPtr++; // Pass second }, thus getting rid of the doubling.
+    } else
+      // Transfer other formatting argument char to the resulting string.
+      lit.push_back(*BufferPtr++);
+  }
 }
 
 
@@ -2476,7 +2503,7 @@ Token clang::Lexer::processExpression(std::vector<Token>& tokens, bool allowComm
       Token ident;
       PP->Lex(ident);
 
-      if (ident.getKind() != tok::identifier) {
+      if (ident.getKind() != tok::identifier && ident.getKind() != tok::kw_operator) {
         BufferPtr = save;
 
         Token cTok;
