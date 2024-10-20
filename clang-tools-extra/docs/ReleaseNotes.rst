@@ -115,6 +115,17 @@ New checks
   Gives warnings for tagged unions, where the number of tags is
   different from the number of data members inside the union.
 
+- New :doc:`modernize-use-format-literals
+  <clang-tidy/checks/modernize/use-format-literals>` check.
+
+  FIXME: Write a short description.
+
+- New :doc:`portability-template-virtual-member-function
+  <clang-tidy/checks/portability/template-virtual-member-function>` check.
+
+  Finds cases when an uninstantiated virtual member function in a template class 
+  causes cross-compiler incompatibility.
+
 New check aliases
 ^^^^^^^^^^^^^^^^^
 
