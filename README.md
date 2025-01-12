@@ -1,44 +1,64 @@
-# The LLVM Compiler Infrastructure
+# clang-tidy modernize-nlohmann-json-explicit-conversions check
 
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/llvm/llvm-project/badge)](https://securityscorecards.dev/viewer/?uri=github.com/llvm/llvm-project)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/8273/badge)](https://www.bestpractices.dev/projects/8273)
-[![libc++](https://github.com/llvm/llvm-project/actions/workflows/libcxx-build-and-test.yaml/badge.svg?branch=main&event=schedule)](https://github.com/llvm/llvm-project/actions/workflows/libcxx-build-and-test.yaml?query=event%3Aschedule)
+Teach clang-tidy to convert [nlohmann::json](https://json.nlohmann.me/) implicit conversions to explicit calls to the `get` function.
 
-Welcome to the LLVM project!
+It is expected that the next major version of nlohmann::json will stop supporting implicit conversions. It is possible to tell current versions to [disallow such conversions](https://json.nlohmann.me/api/macros/json_use_implicit_conversions/) now by defining `JSON_USE_IMPLICIT_CONVERSIONS=0`.
 
-This repository contains the source code for LLVM, a toolkit for the
-construction of highly optimized compilers, optimizers, and run-time
-environments.
+These changes to clang-tidy add a new _modernize-nlohmann-json-explicit-conversions_ check that will convert implicit conversions to explicit ones. In other words, it turns:
+```c++
+void f(const nlohmann::json &j1, const nlohmann::json &j2)
+{
+    int i = j1;
+    double d = j2.at("value");
+    std::cout << i << " " << d << "\n";
+}
+```
+into
+```c++
+void f(const nlohmann::json &j1, const nlohmann::json &j2)
+{
+    int i = j1.get<int>();
+    double d = j2.at("value").get<double>();
+    std::cout << i << " " << d << "\n";
+}
+```
+by knowing what the target type is for the implicit conversion and making it explicit.
 
-The LLVM project has multiple components. The core of the project is
-itself called "LLVM". This contains all of the tools, libraries, and header
-files needed to process intermediate representations and convert them into
-object files. Tools include an assembler, disassembler, bitcode analyzer, and
-bitcode optimizer.
+# Usage
 
-C-like languages use the [Clang](https://clang.llvm.org/) frontend. This
-component compiles C, C++, Objective-C, and Objective-C++ code into LLVM bitcode
--- and from there into object files, using LLVM.
+```sh
+clang-tidy -fix -checks=-*,modernize-nlohmann-json-explicit-conversions source.cpp
+```
 
-Other components include:
-the [libc++ C++ standard library](https://libcxx.llvm.org),
-the [LLD linker](https://lld.llvm.org), and more.
+# Missing features
 
-## Getting the Source Code and Building LLVM
+Although the matcher matches and can happily turn the following code:
+```c++
+bool b(nlohmann::json &j)
+{
+    auto i = j.find("bool");
+    return *i;
+}
+```
+into
+```c++
+bool b(nlohmann::json &j)
+{
+    auto i = j.find("bool");
+    return i->get<bool>();
+}
+```
 
-Consult the
-[Getting Started with LLVM](https://llvm.org/docs/GettingStarted.html#getting-the-source-code-and-building-llvm)
-page for information on building and running LLVM.
+It can't match the following code at all so makes no attempt to fix it:
+```c++
+std::optional<int> a(nlohmann::json &j)
+{
+    const auto it = j.find("test");
+    if (it != j.end())
+        return *it;
+    else
+        return std::nullopt;
+}
+```
 
-For information on how to contribute to the LLVM project, please take a look at
-the [Contributing to LLVM](https://llvm.org/docs/Contributing.html) guide.
-
-## Getting in touch
-
-Join the [LLVM Discourse forums](https://discourse.llvm.org/), [Discord
-chat](https://discord.gg/xS7Z362),
-[LLVM Office Hours](https://llvm.org/docs/GettingInvolved.html#office-hours) or
-[Regular sync-ups](https://llvm.org/docs/GettingInvolved.html#online-sync-ups).
-
-The LLVM project has adopted a [code of conduct](https://llvm.org/docs/CodeOfConduct.html) for
-participants to all modes of communication within the project.
+This is because the implicit conversion occurs inside `std::optional`'s constructor. Such uses can be found after conversion by setting `JSON_USE_IMPLICIT_CONVERSIONS=0` and looking for compilation errors.
