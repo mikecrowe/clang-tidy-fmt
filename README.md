@@ -1,44 +1,63 @@
-# The LLVM Compiler Infrastructure
+# clang-tidy modernize-nlohmann-json-explicit-conversions check
 
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/llvm/llvm-project/badge)](https://securityscorecards.dev/viewer/?uri=github.com/llvm/llvm-project)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/8273/badge)](https://www.bestpractices.dev/projects/8273)
-[![libc++](https://github.com/llvm/llvm-project/actions/workflows/libcxx-build-and-test.yaml/badge.svg?branch=main&event=schedule)](https://github.com/llvm/llvm-project/actions/workflows/libcxx-build-and-test.yaml?query=event%3Aschedule)
+Teach clang-tidy to convert [nlohmann::json](https://json.nlohmann.me/) implicit conversions to explicit calls to the `get` function.
 
-Welcome to the LLVM project!
+It is expected that the next major version of nlohmann::json will stop supporting implicit conversions. It is possible to tell current versions to [disallow such conversions](https://json.nlohmann.me/api/macros/json_use_implicit_conversions/) now by defining `JSON_USE_IMPLICIT_CONVERSIONS=0`.
 
-This repository contains the source code for LLVM, a toolkit for the
-construction of highly optimized compilers, optimizers, and run-time
-environments.
+These changes to clang-tidy add a new _modernize-nlohmann-json-explicit-conversions_ check that will convert implicit conversions to explicit ones. In other words, it turns:
+```c++
+void f(const nlohmann::json &j1, const nlohmann::json &j2)
+{
+    int i = j1;
+    double d = j2.at("value");
+    std::cout << i << " " << d << "\n";
+}
+```
+into
+```c++
+void f(const nlohmann::json &j1, const nlohmann::json &j2)
+{
+    int i = j1.get<int>();
+    double d = j2.at("value").get<double>();
+    std::cout << i << " " << d << "\n";
+}
+```
+by knowing what the target type is for the implicit conversion and making it explicit.
 
-The LLVM project has multiple components. The core of the project is
-itself called "LLVM". This contains all of the tools, libraries, and header
-files needed to process intermediate representations and convert them into
-object files. Tools include an assembler, disassembler, bitcode analyzer, and
-bitcode optimizer.
+# Usage
 
-C-like languages use the [Clang](https://clang.llvm.org/) frontend. This
-component compiles C, C++, Objective-C, and Objective-C++ code into LLVM bitcode
--- and from there into object files, using LLVM.
+```sh
+clang-tidy -fix -checks=-*,modernize-nlohmann-json-explicit-conversions source.cpp
+```
 
-Other components include:
-the [libc++ C++ standard library](https://libcxx.llvm.org),
-the [LLD linker](https://lld.llvm.org), and more.
+# Missing features
 
-## Getting the Source Code and Building LLVM
+Although the matcher matches and can happily turn the following code:
+```c++
+bool b(nlohmann::json &j)
+{
+    auto i = j.find("bool");
+    return *i;
+}
+```
+into
+```c++
+bool b(nlohmann::json &j)
+{
+    auto i = j.find("bool");
+    return i->get<bool>();
+}
+```
 
-Consult the
-[Getting Started with LLVM](https://llvm.org/docs/GettingStarted.html#getting-the-source-code-and-building-llvm)
-page for information on building and running LLVM.
-
-For information on how to contribute to the LLVM project, please take a look at
-the [Contributing to LLVM](https://llvm.org/docs/Contributing.html) guide.
-
-## Getting in touch
-
-Join the [LLVM Discourse forums](https://discourse.llvm.org/), [Discord
-chat](https://discord.gg/xS7Z362),
-[LLVM Office Hours](https://llvm.org/docs/GettingInvolved.html#office-hours) or
-[Regular sync-ups](https://llvm.org/docs/GettingInvolved.html#online-sync-ups).
-
-The LLVM project has adopted a [code of conduct](https://llvm.org/docs/CodeOfConduct.html) for
-participants to all modes of communication within the project.
+It can't match the following code at all so makes no attempt to fix it:
+```c++
+std::optional<int> a(nlohmann::json &j)
+{
+    const auto it = j.find("test");
+    if (it != j.end())
+        return *it;
+    else
+        return std::nullopt;
+}
+```
+I'm not entirely sure why, but the [AST](https://godbolt.org/#z:OYLghAFBqd5QCxAYwPYBMCmBRdBLAF1QCcAaPECAMzwBtMA7AQwFtMQByARg9KtQYEAysib0QXACx8BBAKoBnTAAUAHpwAMvAFYTStJg1DIApACYAQuYukl9ZATwDKjdAGFUtAK4sGe1wAyeAyYAHI%2BAEaYxBIAzKQADqgKhE4MHt6%2BekkpjgJBIeEsUTFc8XaYDmlCBEzEBBk%2Bfly2mPZ5DDV1BAVhkdFxtrX1jVktCsM9wX3FA2UAlLaoXsTI7BzmscHI3lgA1Caxbgy0qAgshgwA9NoKAgB0CAkJh9gmGgCCm9u7mAdHqASHTEr3eX0%2BwQIeyoEBOZwuDD8IFuAj2ACptPMwSYAOxWT57Ql7YiYAgrBjoiDaaxcLGxfFfHEAEWxEMEe2AsNO50uIGRdwp5gAbJjsXiwUTiaTyXtqfSxSzPmCIqhPHsIlz4bz%2BajhaKleKCUSmF4iHs8P8mbL7jQGOgIOYzCrPI66QzJSSycQKWi8IcGbjFeCPhN0HzAcDaIc3JDXnsmJqeYi%2BSjBWYRViDe6iWgGBN46bUOaoYcrdobcF7Y6CJgJq7/RKiXgqHsIIQ9mAwKXra4IPNMx9JR7pd70YQG0bCW0lI2h1KvRTQ3yGF5aKcgRPGUyOItaJwAKy8PwcLSkVCcNzWax7O4rNYHMyxHikAiaHeLADWIFiQvuAE4uD/DQhQ0DR9zMMxANiMx9E4SQjzfM9OF4BQQA0F830WOBYBgRAUFQFgEjoaJyEoNBCOImIdkMYAAH0CGILwGA/Pg6BrYhUIgCJEIiYI6gAT04Z9eOYYh%2BIAeQibRKlfbheHIthBHEk5BJPXgsAiLxgDcMRaFQuTSCwBFgHENTDLwEkqgAN1rRDMFUSpTXWZ9ITaRDaDwCJiAEjwsEQhi8BYITeBs4gVSUJlMGMjyjEwvgDGABQADU8EwAB3cSEkYYKZEEEQxHYKRcvkJQ1EQ3QWgMWLTEsax9E81DYGYNgQDhJMGFo1NSFCzgny4Hh%2BzPIE0n03hUFC4g8CwRq%2B1ado0hcO1RmaUhAmmIoSmyZJUgEZattyNJeg2uY5pk6pJj28Y2jOgQunqI7%2BlKIZuku577vWx6JEWW9VkK3cDwQszzw4PZVAADiFABaIVJD2aijFbBimI/eZW1wQgSAfJ95l4WStEGr993QvcOHg0ggsfe5Yn3HEQI0P8cQ0Rn90kP9pGPU9gZQtCMLUrDcIgJAmAmUiIHIoj6GIUJWHWcGoZhuGquARHGOYnHVvwIhJrDFp%2BDy0RxC4GC9ZKlR1DMirTqqZwIFcV61sKT6WhyHb0k8Jp9tdh7Zieiprc6C73bGK2OjuqZHZ9vQJheoOVuj96I822kXxJTAprQ/6OEPUgObGzgQyhFL0uiUGIeh2H4eViAkbVtHNcxzYWj2DwKMlrHaVxzDFgQTAmCwGJZpJsmgsZ%2B4hUAjQjaFfcaa4MH9xzxCudsHm8Z3UhsLw5YCASU1RfFyjpZajg5fLxWaJV5H1cwevtb0E38sN6QTcUM3yr0NLvISYLM%2Bz3OkI4OJU0u8oSoBbKfBWldL61wgC3CWJdG7qzXoNIevAgq/g0I%2BWIENYg4mpjifcf4wZ/kXkDZCK90LIM/CAIUsR7gaDBvTWIf42Y4hxIwoUYNYIcFiIDTm5CqHcLMHwvOHBO580WKFFIzhJBAA) looks rather different because the conversion happens during construction of the `std::optional` and there's no `operator int` in it. I suspect that the matcher I'm using to match everything else is actually wrong but just happens to work for the cases I'm testing and were found in the code I converted. I didn't spend very long trying to solve this because I had only one such occurrence in my code and could fix it by hand.

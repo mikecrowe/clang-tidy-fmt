@@ -168,6 +168,13 @@ New checks
   Gives warnings for tagged unions, where the number of tags is
   different from the number of data members inside the union.
 
+- New :doc:`modernize-nlohmann-json-explicit-conversions
+  <clang-tidy/checks/modernize/nlohmann-json-explicit-conversions>` check.
+
+  Converts implicit conversions via ``operator ValueType`` in code that
+  uses the `nlohmann/json <https://json.nlohmann.me/>`_ library to calls to
+  the ``get()`` method with an explicit type.
+
 - New :doc:`modernize-use-integer-sign-comparison
   <clang-tidy/checks/modernize/use-integer-sign-comparison>` check.
 
